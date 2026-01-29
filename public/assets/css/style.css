@@ -1,0 +1,163 @@
+html {
+    scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html {
+        scroll-behavior: auto;
+    }
+
+    * {
+        animation: none !important;
+        transition: none !important;
+    }
+}
+
+/* Calendário 100% + sem sombra (mantém tua regra) */
+
+.shimmer.is-loading {
+    position: relative
+}
+
+.shimmer.is-loading::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .5), transparent);
+    animation: skel 1.1s infinite;
+    opacity: .35;
+    pointer-events: none
+}
+
+.dark .shimmer.is-loading::after {
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .08), transparent);
+    opacity: .6
+}
+
+.shimmer.is-loaded::after {
+    display: none
+}
+
+@keyframes skel {
+    100% {
+        transform: translateX(100%)
+    }
+}
+
+.nav-link-atalho {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: .35rem;
+    text-decoration: none;
+    color: inherit;
+    font-size: .8rem;
+    font-weight: 600
+}
+
+.icons-carousel {
+    display: flex;
+    gap: 1rem;
+    overflow-x: auto;
+    padding: .5rem .25rem
+}
+
+.icon-button {
+    min-width: 88px;
+    display: flex;
+    justify-content: center
+}
+
+.icon-button i {
+    font-size: 20px
+}
+
+.price-default {
+    font-variant-numeric: tabular-nums
+}
+
+/* container cheio, sem sombra, etc. */
+.flatpickr-calendar.animate.inline.arrowTop {
+    width: 100% !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    border-radius: .75rem !important;
+}
+
+/* grid elástico, mas com 7 colunas fixas */
+.flatpickr-days,
+.flatpickr-days .dayContainer {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    border: 0 !important;
+}
+
+/* garante SEMPRE 7 dias por linha */
+.flatpickr-day {
+    max-width: none !important;                  /* remove os 39px */
+    width: calc(100% / 7) !important;            /* 7 colunas */
+    box-sizing: border-box;
+}
+
+/* remove o triângulo do “balão” */
+.flatpickr-calendar:before,
+.flatpickr-calendar:after {
+    display: none !important;
+}
+
+
+/* ----- Dark mode: texto/ícones claros + borda ----- */
+.dark .flatpickr-calendar.animate.inline.arrowTop {
+    background: transparent !important;
+}
+
+/* títulos/ano/mes e cabeçalhos */
+.dark .flatpickr-months .flatpickr-month,
+.dark .flatpickr-current-month .cur-month,
+.dark .flatpickr-current-month input.cur-year,
+.dark .flatpickr-weekday {
+    color: #e5e7eb !important;
+}
+
+/* setas de navegação */
+.dark .flatpickr-prev-month svg,
+.dark .flatpickr-next-month svg {
+    stroke: #e5e7eb !important;
+    fill: none !important;
+}
+
+/* dias (normais / fora do mês / desabilitados) */
+.dark .flatpickr-day {
+    color: #e5e7eb !important;
+    background: transparent !important;
+}
+
+.dark .flatpickr-day.otherMonthDay,
+.dark .flatpickr-day.prevMonthDay,
+.dark .flatpickr-day.nextMonthDay {
+    color: #9ca3af !important;
+}
+
+.dark .flatpickr-day.disabled {
+    color: #6b7280 !important;
+}
+
+/* hover/“hoje”/selecionado coerentes com a brand */
+.dark .flatpickr-day:hover {
+    background: rgba(255, 255, 255, .06) !important;
+}
+
+.dark .flatpickr-day.today:not(.selected) {
+    border-color: #93c5fd !important;
+}
+
+.dark .flatpickr-day.selected,
+.dark .flatpickr-day.startRange,
+.dark .flatpickr-day.endRange {
+    background: #2563eb !important;
+    border-color: #2563eb !important;
+    color: #fff !important;
+}
+
+
