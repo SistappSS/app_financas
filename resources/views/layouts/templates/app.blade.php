@@ -7,6 +7,23 @@
 
 <a href="#conteudo" class="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 bg-white dark:bg-neutral-800 text-sm px-3 py-2 rounded-lg shadow-soft dark:shadow-softDark">Pular para o conteúdo</a>
 
+
+<div id="page-skeleton" class="fixed inset-0 z-[9998] bg-white/95 dark:bg-neutral-950/95 backdrop-blur-sm transition-opacity duration-200">
+    <div class="max-w-7xl mx-auto px-4 md:px-6 lg:px-8 pt-20 space-y-4 animate-pulse">
+        <div class="h-8 w-56 rounded-xl bg-neutral-200 dark:bg-neutral-800"></div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="h-28 rounded-2xl bg-neutral-200 dark:bg-neutral-800"></div>
+            <div class="h-28 rounded-2xl bg-neutral-200 dark:bg-neutral-800"></div>
+        </div>
+        <div class="h-64 rounded-2xl bg-neutral-200 dark:bg-neutral-800"></div>
+        <div class="space-y-3">
+            <div class="h-14 rounded-xl bg-neutral-200 dark:bg-neutral-800"></div>
+            <div class="h-14 rounded-xl bg-neutral-200 dark:bg-neutral-800"></div>
+            <div class="h-14 rounded-xl bg-neutral-200 dark:bg-neutral-800"></div>
+        </div>
+    </div>
+</div>
+
 <div id="appLayout" class="md:grid md:grid-cols-[260px_1fr] md:min-h-screen transition-[grid-template-columns] duration-200">
     @include('layouts.partials.sidenav')
 
@@ -56,6 +73,14 @@
 
     window.addEventListener('online', () => {
         hideConnectionOverlay();
+    });
+
+
+    window.addEventListener('load', () => {
+        const sk = document.getElementById('page-skeleton');
+        if (!sk) return;
+        sk.classList.add('opacity-0', 'pointer-events-none');
+        setTimeout(() => sk.remove(), 220);
     });
 
     // Wrapper global pra fetch/AJAX

@@ -176,9 +176,24 @@ class TransactionController extends Controller
         return $this->handleUniqueTransaction($request, $txDate, $typeCard, $isCard);
     }
 
+
+    private function allowedUserIds()
+    {
+        $ownerId = \App\Models\AdditionalUser::ownerIdFor();
+
+        return \App\Models\AdditionalUser::query()
+            ->where('user_id', $ownerId)
+            ->pluck('linked_user_id')
+            ->push($ownerId)
+            ->unique()
+            ->values();
+    }
+
     public function show(string $id)
     {
-        $tx = Transaction::with(['transactionCategory', 'card'])->findOrFail($id);
+        $tx = Transaction::with(['transactionCategory', 'card'])
+            ->whereIn('user_id', $this->allowedUserIds())
+            ->findOrFail($id);
 
         return response()->json($tx);
     }
@@ -228,7 +243,7 @@ class TransactionController extends Controller
             }],
         ]);
 
-        $tx = Transaction::findOrFail($id);
+        $tx = Transaction::whereIn('user_id', $this->allowedUserIds())->findOrFail($id);
 
         $txDate         = Carbon::parse($request->date)->startOfDay();
         $isPix          = $request->type === 'pix';
@@ -294,7 +309,7 @@ class TransactionController extends Controller
             $item->delete();
         });
 
-        Transaction::findOrFail($id)->delete();
+        Transaction::whereIn('user_id', $this->allowedUserIds())->findOrFail($id)->delete();
 
         return response()->noContent();
     }
