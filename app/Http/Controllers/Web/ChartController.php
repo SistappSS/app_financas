@@ -197,7 +197,7 @@ class ChartController extends Controller
                     $items = collect($map)->filter(fn($v) => $v > 0)->map(function ($v, $cid) use ($cardMeta) {
                         $c = $cardMeta->get($cid);
                         $label = $c ? ($c->cardholder_name . ' • ' . str_pad((string)$c->last_four_digits, 4, '0', STR_PAD_LEFT)) : '(Cartão)';
-                        return ['id' => $cid, 'label' => $label, 'value' => round($v, 2), 'color' => $c->color_card ?? '#a78bfa', 'next' => null];
+                        return ['id' => $cid, 'label' => $label, 'value' => round($v, 2), 'color' => $c->color_card ?? '#a78bfa', 'next' => ['level' => 'titles', 'params' => ['pay' => 'card', 'card_type' => $cardType, 'instrument_id' => $cid, 'type' => $type, 'category_id' => $categoryId]]];
                     })->values()->map(fn($r) => self::paint($r));
 
                     return response()->json([
@@ -222,12 +222,57 @@ class ChartController extends Controller
                 $items = collect($map)->filter(fn($v) => $v > 0)->map(function ($v, $aid) use ($accMeta) {
                     $a = $accMeta->get($aid);
                     $label = $a?->bank_name ?? '(Sem conta)';
-                    return ['id' => $aid, 'label' => $label, 'value' => round($v, 2), 'color' => self::colorForKey($aid . $label), 'next' => null];
+                    return ['id' => $aid, 'label' => $label, 'value' => round($v, 2), 'color' => self::colorForKey($aid . $label), 'next' => ['level' => 'titles', 'params' => ['pay' => $pay, 'instrument_id' => $aid, 'type' => $type, 'category_id' => $categoryId]]];
                 })->values()->map(fn($r) => self::paint($r));
 
                 return response()->json([
                     'mode' => 'tx', 'level' => 'instrument', 'title' => 'Contas',
                     'breadcrumbs' => $breadcrumbs, 'items' => $items, 'total' => $items->sum('value'),
+                ]);
+            }
+
+
+            if ($level === 'titles') {
+                $instrumentId = $req->string('instrument_id')->toString();
+                $rowsMap = [];
+
+                foreach ($events as $e) {
+                    if ($type && ($e['type'] ?? null) !== $type) continue;
+                    if ($categoryId && (string)($e['category_id'] ?? '') !== (string)$categoryId) continue;
+                    if ($pay && ($e['pay'] ?? null) !== $pay) continue;
+
+                    if ($pay === 'card') {
+                        if ($cardType && ($e['type_card'] ?? null) !== $cardType) continue;
+                        if ($instrumentId && (string)($e['card_id'] ?? '') !== (string)$instrumentId) continue;
+                    } else {
+                        if ($instrumentId && (string)($e['account_id'] ?? '') !== (string)$instrumentId) continue;
+                    }
+
+                    $title = trim((string)($e['title'] ?? $e['category_name'] ?? 'Lançamento'));
+                    $key = ($e['id'] ?? uniqid('e', true)) . '|' . ($e['date'] ?? '');
+                    $rowsMap[$key] = [
+                        'id' => $key,
+                        'label' => $title . (!empty($e['date']) ? ' — ' . Carbon::parse($e['date'])->format('d/m') : ''),
+                        'value' => round(abs((float)$e['amount']), 2),
+                        'color' => $e['color'] ?? '#94a3b8',
+                        'next' => null,
+                    ];
+                }
+
+                $items = collect($rowsMap)->sortByDesc('value')->values()->map(fn($r) => self::paint($r));
+
+                $breadcrumbs[] = ['label' => 'Tipos', 'level' => 'type', 'params' => []];
+                if ($type) $breadcrumbs[] = ['label' => ucfirst($type), 'level' => 'category', 'params' => ['type' => $type]];
+                if ($categoryId) $breadcrumbs[] = ['label' => 'Pagamento', 'level' => 'pay', 'params' => ['type' => $type, 'category_id' => $categoryId]];
+                $breadcrumbs[] = ['label' => 'Contas', 'level' => 'instrument', 'params' => ['type' => $type, 'category_id' => $categoryId, 'pay' => $pay, 'card_type' => $cardType]];
+
+                return response()->json([
+                    'mode' => 'tx',
+                    'level' => 'titles',
+                    'title' => 'Detalhes das entradas/lançamentos',
+                    'breadcrumbs' => $breadcrumbs,
+                    'items' => $items,
+                    'total' => $items->sum('value'),
                 ]);
             }
 
@@ -506,7 +551,7 @@ class ChartController extends Controller
                   ->orWhereRaw('LOWER(t.title) NOT IN (?, ?, ?)', ['total fatura','fatura total','total da fatura']);
             })
             ->get([
-                't.id','t.amount','t.date as occ_date','t.type as pay','t.type_card','t.account_id','t.card_id',
+                't.id','t.title','t.amount','t.date as occ_date','t.type as pay','t.type_card','t.account_id','t.card_id',
                 'c.id as category_id','c.name as category_name','c.type as cat_type','c.color'
             ]);
 
@@ -528,6 +573,9 @@ class ChartController extends Controller
                 'card_id' => $r->card_id,
                 'is_invoice' => false,
                 'paid' => $isPaid,
+                'id' => (string)$r->id,
+                'title' => $r->title,
+                'date' => Carbon::parse($r->occ_date)->toDateString(),
             ];
         }
 
@@ -552,7 +600,7 @@ class ChartController extends Controller
             })
             ->get([
                 'r.id as rid','r.payment_day','r.amount',
-                't.id as tid','t.date as tdate','t.created_at as tcreated','t.type as pay','t.type_card','t.account_id','t.card_id','t.recurrence_type',
+                't.id as tid','t.title as ttitle','t.date as tdate','t.created_at as tcreated','t.type as pay','t.type_card','t.account_id','t.card_id','t.recurrence_type',
                 'c.id as category_id','c.name as category_name','c.type as cat_type','c.color'
             ]);
 
@@ -575,7 +623,7 @@ class ChartController extends Controller
                             'type'=>$type,'amount'=>abs((float)$r->amount),
                             'category_id'=>(string)$r->category_id,'category_name'=>$r->category_name,'color'=>$r->color,
                             'pay'=>$r->pay,'type_card'=>$r->type_card,'account_id'=>$r->account_id,'card_id'=>$r->card_id,
-                            'is_invoice'=>false,'paid'=>$isPaid,
+                            'is_invoice'=>false,'paid'=>$isPaid,'id'=>(string)$r->tid,'title'=>$r->ttitle,'date'=>$occ->toDateString(),
                         ];
                     }
                 }
@@ -594,7 +642,7 @@ class ChartController extends Controller
                                 'type'=>$type,'amount'=>abs((float)$r->amount),
                                 'category_id'=>(string)$r->category_id,'category_name'=>$r->category_name,'color'=>$r->color,
                                 'pay'=>$r->pay,'type_card'=>$r->type_card,'account_id'=>$r->account_id,'card_id'=>$r->card_id,
-                                'is_invoice'=>false,'paid'=>$isPaid,
+                                'is_invoice'=>false,'paid'=>$isPaid,'id'=>(string)$r->tid,'title'=>$r->ttitle,'date'=>$occ->toDateString(),
                             ];
                         }
                     }
@@ -609,7 +657,7 @@ class ChartController extends Controller
             ->join('custom_item_recurrents as ci','ci.recurrent_id','=','r.id')
             ->whereIn('r.user_id', $userIds)
             ->get([
-                't.id as tid','t.type as pay','t.type_card','t.account_id','t.card_id',
+                't.id as tid','t.title as ttitle','t.type as pay','t.type_card','t.account_id','t.card_id',
                 'c.id as category_id','c.name as category_name','c.type as cat_type','c.color',
                 'ci.reference_year','ci.reference_month','ci.payment_day','ci.amount'
             ]);

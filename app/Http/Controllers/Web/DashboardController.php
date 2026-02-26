@@ -106,6 +106,33 @@ class DashboardController extends Controller
 
         [$currentInvoices, $cardTip] = $this->buildInvoicesWidget($userIds, $today);
 
+        $topCategoryLimits = Transaction::query()
+            ->join('transaction_categories as tc', 'tc.id', '=', 'transactions.transaction_category_id')
+            ->whereIn('transactions.user_id', $userIds)
+            ->whereBetween('transactions.date', [$startOfMonth->toDateString(), $endOfMonth->toDateString()])
+            ->whereIn('tc.type', ['despesa', 'investimento'])
+            ->selectRaw('tc.id as category_id, tc.name as category_name, tc.monthly_limit, tc.type as category_type, COALESCE(SUM(transactions.amount),0) as spent')
+            ->groupBy('tc.id', 'tc.name', 'tc.monthly_limit', 'tc.type')
+            ->orderByDesc('spent')
+            ->limit(6)
+            ->get()
+            ->map(function ($r) {
+                $limit = (float) ($r->monthly_limit ?? 0);
+                $spent = (float) ($r->spent ?? 0);
+                return [
+                    'category_id' => (string) $r->category_id,
+                    'name' => (string) $r->category_name,
+                    'type' => (string) $r->category_type,
+                    'spent' => $spent,
+                    'spent_brl' => brlPrice($spent),
+                    'monthly_limit' => $limit,
+                    'monthly_limit_brl' => $limit > 0 ? brlPrice($limit) : null,
+                    'available' => $limit > 0 ? max($limit - $spent, 0) : null,
+                    'available_brl' => $limit > 0 ? brlPrice(max($limit - $spent, 0)) : null,
+                ];
+            })
+            ->values();
+
         $kpis = $this->kpisForMonth($userIds, $startOfMonth, $endOfMonth);
         $accountsBalance = $kpis['accountsBalance'];
         $savingsBalance = Saving::whereIn('savings.user_id', $userIds)->sum('current_amount');
@@ -116,7 +143,8 @@ class DashboardController extends Controller
             'recentTransactions', 'calendarEvents',
             'startOfMonth', 'endOfMonth',
             'currentInvoices', 'cardTip',
-            'upcomingAny'
+            'upcomingAny',
+            'topCategoryLimits'
         ));
     }
 
@@ -831,6 +859,34 @@ class DashboardController extends Controller
             'saldoPrevisto_brl' => brlPrice($kpis['saldoPrevisto']),
         ]);
 
+    }
+
+
+    public function adjustTransaction(Request $request, Transaction $transaction)
+    {
+        $ownerId = AdditionalUser::ownerIdFor();
+        $userIds = AdditionalUser::where('user_id', $ownerId)
+            ->pluck('linked_user_id')->push($ownerId)->unique()->values();
+
+        abort_unless(in_array($transaction->user_id, $userIds->all()), 403);
+
+        $data = $request->validate([
+            'amount' => ['required', 'numeric', 'min:0.01'],
+            'date' => ['required', 'date'],
+        ]);
+
+        $transaction->update([
+            'amount' => (float) $data['amount'],
+            'date' => Carbon::parse($data['date'])->toDateString(),
+        ]);
+
+        return response()->json([
+            'ok' => true,
+            'transaction_id' => (string) $transaction->id,
+            'amount' => (float) $transaction->amount,
+            'amount_brl' => brlPrice($transaction->amount),
+            'date' => Carbon::parse($transaction->date)->toDateString(),
+        ]);
     }
 
     public function paymentTransaction(Request $request, Transaction $transaction)

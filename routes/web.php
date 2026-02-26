@@ -59,6 +59,7 @@ Route::middleware(['auth', config('jetstream.auth_session'), 'subscription.acces
         // Dashboard Data
         Route::get('/dashboard/kpis', [WebDashboardController::class, 'kpis'])->name('dashboard.kpis');
         Route::post('/transactions/{transaction}/payment', [WebDashboardController::class, 'paymentTransaction'])->name('transaction-payment');
+        Route::patch('/transactions/{transaction}/adjust', [WebDashboardController::class, 'adjustTransaction'])->name('transaction-adjust');
 
         // Users
         Route::get('/user', [WebUserController::class, 'index'])->name('user-view.index');
