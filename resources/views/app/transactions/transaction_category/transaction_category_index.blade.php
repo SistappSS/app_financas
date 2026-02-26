@@ -118,13 +118,13 @@
                                 <span class="text-xs text-neutral-500 dark:text-neutral-400">Tipo</span>
                                 <div class="mt-1 inline-flex w-full rounded-xl border border-neutral-200/70 dark:border-neutral-800/70 bg-neutral-50 dark:bg-neutral-800 p-1">
                                     <input type="radio" name="type" value="entrada" id="ctEnt" class="peer/ct1 hidden" checked>
-                                    <label for="ctEnt" class="flex-1 text-center px-3 py-1.5 rounded-lg bg-white dark:bg-neutral-900 shadow-sm cursor-pointer peer-checked/ct1:font-medium">Entrada</label>
+                                    <label for="ctEnt" class="js-type-label flex-1 text-center px-3 py-1.5 rounded-lg cursor-pointer hover:bg-white/70 dark:hover:bg-neutral-900/70">Entrada</label>
 
                                     <input type="radio" name="type" value="despesa" id="ctDesp" class="peer/ct2 hidden">
-                                    <label for="ctDesp" class="flex-1 text-center px-3 py-1.5 rounded-lg cursor-pointer hover:bg-white/70 dark:hover:bg-neutral-900/70">Despesa</label>
+                                    <label for="ctDesp" class="js-type-label flex-1 text-center px-3 py-1.5 rounded-lg cursor-pointer hover:bg-white/70 dark:hover:bg-neutral-900/70">Despesa</label>
 
                                     <input type="radio" name="type" value="investimento" id="ctInv" class="peer/ct3 hidden">
-                                    <label for="ctInv" class="flex-1 text-center px-3 py-1.5 rounded-lg cursor-pointer hover:bg-white/70 dark:hover:bg-neutral-900/70">Investimento</label>
+                                    <label for="ctInv" class="js-type-label flex-1 text-center px-3 py-1.5 rounded-lg cursor-pointer hover:bg-white/70 dark:hover:bg-neutral-900/70">Investimento</label>
                                 </div>
                                 <p class="field-error mt-1 text-xs text-red-600 hidden"></p>
                             </label>
@@ -252,11 +252,22 @@
 
             // radios de tipo
             const typeRadios = form.querySelectorAll('input[name="type"]');
+            function syncTypeLabelActive(){
+                form.querySelectorAll('.js-type-label').forEach(lb => {
+                    lb.classList.remove('bg-white','dark:bg-neutral-900','shadow-sm','font-medium','text-brand-700');
+                });
+                const checked = form.querySelector('input[name="type"]:checked');
+                const activeLabel = checked ? form.querySelector(`label[for="${checked.id}"]`) : null;
+                if (activeLabel) {
+                    activeLabel.classList.add('bg-white','dark:bg-neutral-900','shadow-sm','font-medium','text-brand-700');
+                }
+            }
             typeRadios.forEach(r=>{
                 r.addEventListener('change', ()=>{
                     const t = getTypeVal();
                     setLimitUIByType(t);
                     limitField.classList.toggle('hidden', !limitSwitch.checked);
+                    syncTypeLabelActive();
                 });
             });
 
@@ -412,11 +423,13 @@
 
                     // Regras iniciais
                     setLimitUIByType(getTypeVal());
+                    syncTypeLabelActive();
                     limitSwitch.checked = false;
                     hasLimitInp.value = '0';
                     limitField.classList.add('hidden');
                 }
                 if ((m==='edit' || m==='show') && !catIdInp.value) catIdInp.value = currentId ?? '';
+                syncTypeLabelActive();
                 modal.classList.remove('hidden');
                 document.body.classList.add('overflow-hidden','ui-modal-open');
             }

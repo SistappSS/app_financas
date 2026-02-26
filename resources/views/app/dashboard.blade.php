@@ -217,6 +217,41 @@
             </div>
         </div>
 
+
+
+        <div class="rounded-2xl border border-neutral-200/70 dark:border-neutral-800/70 bg-white dark:bg-neutral-900 p-4 md:p-5">
+            <div class="flex items-center justify-between">
+                <p class="font-medium">Maiores gastos no mês</p>
+                <small class="text-neutral-500">com limite da categoria</small>
+            </div>
+
+            <ul class="mt-3 divide-y divide-neutral-200/70 dark:divide-neutral-800/70">
+                @forelse($topCategoryLimits as $cat)
+                    <li class="py-3 grid grid-cols-[1fr_auto] gap-3 items-center">
+                        <div>
+                            <p class="text-sm font-medium">{{ $cat['name'] }}</p>
+                            <p class="text-xs text-neutral-500 dark:text-neutral-400">
+                                Gasto: <strong>{{ $cat['spent_brl'] }}</strong>
+                                @if($cat['monthly_limit_brl'])
+                                    · Limite: <strong>{{ $cat['monthly_limit_brl'] }}</strong>
+                                @endif
+                            </p>
+                        </div>
+                        <div class="text-right">
+                            @if($cat['available_brl'])
+                                <p class="text-xs text-neutral-500 dark:text-neutral-400">Disponível</p>
+                                <p class="text-sm font-semibold {{ $cat['available'] <= 0 ? 'text-red-600' : 'text-emerald-600' }}">{{ $cat['available_brl'] }}</p>
+                            @else
+                                <p class="text-xs text-neutral-400">Sem limite</p>
+                            @endif
+                        </div>
+                    </li>
+                @empty
+                    <li class="py-3 text-sm text-neutral-500">Sem categorias com gasto neste mês.</li>
+                @endforelse
+            </ul>
+        </div>
+
         <!-- Transactions Recent -->
         <div
             class="rounded-2xl border border-neutral-200/70 dark:border-neutral-800/70 bg-white dark:bg-neutral-900 p-4 md:p-5">
