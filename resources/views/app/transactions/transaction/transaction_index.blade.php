@@ -133,9 +133,9 @@
                 @php
                     $groupedCategories = $categories->groupBy('type');
                     $typeLabels = [
-                        1 => 'Receitas',
-                        2 => 'Despesas',
-                        3 => 'Transferências',
+                        'entrada' => 'Entradas',
+                        'despesa' => 'Despesas',
+                        'investimento' => 'Investimentos',
                     ];
                 @endphp
 
@@ -166,7 +166,7 @@
            data-[leave]:[transition-behavior:allow-discrete] sm:text-sm">
 
                         @foreach($groupedCategories as $type => $cats)
-                            <div class="px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide
+                            <div data-group-title="{{ strtolower((string)$type) }}" class="px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide
                     text-slate-400 dark:text-slate-400">
                                 {{ $typeLabels[$type] ?? 'Outros' }}
                             </div>
@@ -191,6 +191,9 @@
                         @endforeach
                     </el-options>
                 </el-select>
+                <div class="mt-2 text-right">
+                    <button type="button" data-open-quick="category" class="text-xs text-brand-600 hover:underline">+ Nova categoria</button>
+                </div>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -267,6 +270,9 @@
                         <option value="{{ $account->id }}">{{ $account->bank_name }}</option>
                     @endforeach
                 </select>
+                <div class="mt-2 text-right">
+                    <button type="button" data-open-quick="account" class="text-xs text-brand-600 hover:underline">+ Nova conta</button>
+                </div>
             </div>
 
             <div id="tx_card_select" class="mt-3 hidden">
@@ -278,6 +284,9 @@
                         <option value="{{ $card->id }}">{{ $card->account ? $card->account->bank_name : '' }} {{ $card->last_four_digits }}</option>
                     @endforeach
                 </select>
+                <div class="mt-2 text-right">
+                    <button type="button" data-open-quick="card" class="text-xs text-brand-600 hover:underline">+ Novo cartão</button>
+                </div>
             </div>
 
             <div class="mt-3">
@@ -353,6 +362,40 @@
             </div>
         </x-modal>
 
+
+
+        <x-modal id="quickCreateModal" titleCreate="Novo item" titleEdit="Novo item" titleShow="Novo item" submitLabel="Salvar">
+            @csrf
+            <input type="hidden" id="quick_kind" value="">
+            <div class="grid grid-cols-1 gap-3">
+                <label class="block">
+                    <span class="text-xs text-neutral-500 dark:text-neutral-400" id="quick_label_1">Nome</span>
+                    <input id="quick_name" type="text" class="mt-1 w-full rounded-xl border border-neutral-200/70 dark:border-neutral-800/70 bg-white/90 dark:bg-neutral-900/70 px-3 py-2">
+                </label>
+                <label class="block hidden" id="quick_extra_wrap">
+                    <span class="text-xs text-neutral-500 dark:text-neutral-400" id="quick_label_2">Valor inicial</span>
+                    <input id="quick_extra" type="text" class="mt-1 w-full rounded-xl border border-neutral-200/70 dark:border-neutral-800/70 bg-white/90 dark:bg-neutral-900/70 px-3 py-2">
+                </label>
+                <div id="quick_card_fields" class="hidden grid grid-cols-2 gap-3">
+                    <label><span class="text-xs text-neutral-500 dark:text-neutral-400">Final</span><input id="quick_card_last4" maxlength="4" class="mt-1 w-full rounded-xl border border-neutral-200/70 dark:border-neutral-800/70 bg-white/90 dark:bg-neutral-900/70 px-3 py-2"></label>
+                    <label><span class="text-xs text-neutral-500 dark:text-neutral-400">Bandeira</span>
+                        <select id="quick_card_brand" class="mt-1 w-full rounded-xl border border-neutral-200/70 dark:border-neutral-800/70 bg-white/90 dark:bg-neutral-900/70 px-3 py-2">
+                            <option value="1">Visa</option>
+                            <option value="2" selected>Mastercard</option>
+                            <option value="3">American Express</option>
+                            <option value="4">Discover</option>
+                            <option value="5">Diners Club</option>
+                            <option value="6">JCB</option>
+                            <option value="7">Elo</option>
+                        </select>
+                    </label>
+                    <label><span class="text-xs text-neutral-500 dark:text-neutral-400">Fechamento</span><input id="quick_card_close" type="number" min="1" max="31" value="10" class="mt-1 w-full rounded-xl border border-neutral-200/70 dark:border-neutral-800/70 bg-white/90 dark:bg-neutral-900/70 px-3 py-2"></label>
+                    <label><span class="text-xs text-neutral-500 dark:text-neutral-400">Vencimento</span><input id="quick_card_due" type="number" min="1" max="31" value="20" class="mt-1 w-full rounded-xl border border-neutral-200/70 dark:border-neutral-800/70 bg-white/90 dark:bg-neutral-900/70 px-3 py-2"></label>
+                </div>
+                <p id="quick_err" class="hidden text-xs text-red-600"></p>
+            </div>
+        </x-modal>
+
         <div id="txSheet" class="fixed inset-0 z-[70] hidden" aria-modal="true" role="dialog">
             <div id="txSheetOv" class="absolute inset-0 bg-black/40 backdrop-blur-[2px]"></div>
             <div class="absolute inset-x-0 bottom-0 rounded-t-2xl border border-neutral-200/60 dark:border-neutral-800/60 bg-white dark:bg-neutral-900 shadow-soft p-2">
@@ -387,7 +430,7 @@
                 };
 
                 const RAW_CATS = @json($categories->map(fn($c)=>['id'=>$c->id,'name'=>$c->name,'type'=>$c->type])->values());
-                const ALL_CATS = (RAW_CATS || []).map(c => ({id: c.id, name: c.name, type: normType(c.type)}));
+                let ALL_CATS = (RAW_CATS || []).map(c => ({id: c.id, name: c.name, type: normType(c.type)}));
 
                 const state = {type:'all', catIds:new Set(), start:'', end:''};
                 const fx = document.getElementById('stFilters');
@@ -438,6 +481,131 @@
                 renderSubcats();
 
                 const TYPE_COLOR={pix:'#2ecc71',card:'#3498db',money:'#f39c12'};
+
+                const quickModal = document.getElementById('quickCreateModal');
+                const quickForm = quickModal?.querySelector('form');
+                const quickKind = document.getElementById('quick_kind');
+                const quickName = document.getElementById('quick_name');
+                const quickExtraWrap = document.getElementById('quick_extra_wrap');
+                const quickExtra = document.getElementById('quick_extra');
+                const quickCardFields = document.getElementById('quick_card_fields');
+                const quickErr = document.getElementById('quick_err');
+
+                function showQuick(kind){
+                    if (!quickModal || !quickForm) return;
+                    quickKind.value = kind;
+                    quickErr?.classList.add('hidden');
+                    quickErr.textContent = '';
+                    quickName.value = '';
+                    if (quickExtra) quickExtra.value = '';
+                    quickExtraWrap?.classList.toggle('hidden', kind !== 'account');
+                    quickCardFields?.classList.toggle('hidden', kind !== 'card');
+                    quickModal.classList.remove('hidden');
+                    document.body.classList.add('overflow-hidden', 'ui-modal-open');
+                }
+
+                async function createQuick(kind){
+                    if (!quickName.value.trim()) throw new Error('Informe um nome.');
+
+                    if (kind === 'category') {
+                        const fd = new FormData();
+                        fd.append('name', quickName.value.trim());
+                        fd.append('type', 'despesa');
+                        fd.append('has_limit', '0');
+                        const r = await fetch("{{ route('transaction-categories.store') }}", {method:'POST', headers:{'X-CSRF-TOKEN': CSRF, Accept:'application/json'}, body: fd});
+                        if (!r.ok) throw new Error('Falha ao criar categoria.');
+                        const cat = await r.json();
+                        const id = cat.id || cat.uuid;
+                        const name = cat.name || quickName.value.trim();
+                        const select = document.getElementById('transaction_category_id');
+                        const optionsWrap = select?.querySelector('el-options');
+                        if (select && optionsWrap && id) {
+                            const typeNorm = normType(cat.type || 'despesa');
+                            const typeTitle = ({entrada:'Entradas', despesa:'Despesas', investimento:'Investimentos'})[typeNorm] || 'Outros';
+
+                            let groupTitle = Array.from(optionsWrap.querySelectorAll('[data-group-title]'))
+                                .find(el => (el.dataset.groupTitle || '') === typeNorm);
+
+                            if (!groupTitle) {
+                                groupTitle = document.createElement('div');
+                                groupTitle.dataset.groupTitle = typeNorm;
+                                groupTitle.className = 'px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-400';
+                                groupTitle.textContent = typeTitle;
+                                optionsWrap.appendChild(groupTitle);
+                            }
+
+                            const opt = document.createElement('el-option');
+                            opt.setAttribute('value', id);
+                            opt.className = 'group/option relative cursor-default select-none py-2 pl-3 pr-9 text-gray-900 dark:text-neutral-50 focus:bg-blue-600 dark:focus:bg-blue-500/30 focus:text-white dark:focus:text-blue-100 focus:outline-none [&:not([hidden])]:block';
+                            opt.innerHTML = `<div class="flex items-center"><i class="${cat.icon || 'fa-solid fa-tags'} fs-5 text-slate-500"></i><span class="ml-3 block truncate font-normal">${name}</span></div>`;
+                            optionsWrap.appendChild(opt);
+
+                            select.value = id;
+                        }
+                        ALL_CATS.push({id, name, type: normType(cat.type || 'despesa')});
+                        renderSubcats();
+                        return;
+                    }
+
+                    if (kind === 'account') {
+                        const fd = new FormData();
+                        fd.append('bank_name', quickName.value.trim());
+                        fd.append('current_balance', String(quickExtra?.value || 0).replace(',', '.'));
+                        const r = await fetch("{{ route('accounts.store') }}", {method:'POST', headers:{'X-CSRF-TOKEN': CSRF, Accept:'application/json'}, body: fd});
+                        if (!r.ok) throw new Error('Falha ao criar conta.');
+                        await fetch("{{ route('accounts.index') }}", {headers:{Accept:'application/json'}}).then(x=>x.json()).then(list=>{
+                            const sel = document.querySelector('#tx_pix_acc select[name="account_id"]');
+                            if (!sel) return;
+                            sel.innerHTML = '';
+                            (list||[]).forEach(a=>{ const o=document.createElement('option'); o.value=a.id; o.textContent=a.bank_name; sel.appendChild(o); });
+                            const created = (list||[]).find(a => String(a.bank_name||'').toLowerCase() === quickName.value.trim().toLowerCase());
+                            if (created) sel.value = created.id;
+                        });
+                        return;
+                    }
+
+                    if (kind === 'card') {
+                        const accountSel = document.querySelector('#tx_pix_acc select[name="account_id"]');
+                        const accountId = accountSel?.value;
+                        if (!accountId) throw new Error('Cadastre/seleciona uma conta antes de criar cartão.');
+                        const fd = new FormData();
+                        fd.append('account_id', accountId);
+                        fd.append('cardholder_name', quickName.value.trim());
+                        fd.append('last_four_digits', (document.getElementById('quick_card_last4')?.value || '0000'));
+                        fd.append('brand', (document.getElementById('quick_card_brand')?.value || '2'));
+                        fd.append('color_card', '#3b82f6');
+                        fd.append('credit_limit', '0');
+                        fd.append('closing_day', document.getElementById('quick_card_close')?.value || '10');
+                        fd.append('due_day', document.getElementById('quick_card_due')?.value || '20');
+                        const r = await fetch("{{ route('cards.store') }}", {method:'POST', headers:{'X-CSRF-TOKEN': CSRF, Accept:'application/json'}, body: fd});
+                        if (!r.ok) throw new Error('Falha ao criar cartão.');
+                        const card = await r.json();
+                        const sel = document.querySelector('#tx_card_select select[name="card_id"]');
+                        if (sel && card?.id) {
+                            const o=document.createElement('option'); o.value=card.id; o.textContent=`${card.account?.bank_name || ''} ${card.last_four_digits || ''}`.trim();
+                            sel.appendChild(o); sel.value=card.id;
+                        }
+                        return;
+                    }
+                }
+
+                document.querySelectorAll('[data-open-quick]').forEach(btn => {
+                    btn.addEventListener('click', () => showQuick(btn.dataset.openQuick));
+                });
+
+                quickModal?.addEventListener('submit', async (e) => {
+                    if (e.target.tagName !== 'FORM') return;
+                    e.preventDefault();
+                    try {
+                        await createQuick(quickKind.value);
+                        quickModal.classList.add('hidden');
+                        document.body.classList.remove('overflow-hidden', 'ui-modal-open');
+                    } catch (err) {
+                        quickErr.textContent = err.message || 'Erro ao criar item.';
+                        quickErr.classList.remove('hidden');
+                    }
+                });
+
                 const TYPE_LABEL={pix:'Pix',card:'Cartão',money:'Dinheiro'};
 
                 function cardTemplate(tx){

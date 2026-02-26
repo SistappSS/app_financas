@@ -78,13 +78,18 @@ class ProjectionService
         $alignToCurrent = false;
 
         if ($rangeFuture) {
-            // 1) Janela totalmente no futuro → nunca ancora no saldo atual
-            $globalFrom = $from->copy();
+            // 1) Janela totalmente no futuro
+            // Parte do saldo real de hoje para evitar projeção iniciando em 0 indevidamente.
+            if ($effectiveCurrent !== null) {
+                $globalFrom = $today->copy();
+                $globalOpening = (float) $effectiveCurrent;
+            } else {
+                $globalFrom = $from->copy();
+                $globalOpening = $savingsBalance;
+            }
+
             $occ   = $buildOcc($globalFrom, $to);
             $bills = $buildBills($globalFrom, $to);
-
-            // base = só cofrinhos marcados (se quiser mudar, dá pra somar contas aqui)
-            $globalOpening = $savingsBalance;
 
             $daysAll = $this->consolidateDays($globalFrom, $to, $globalOpening, $occ, $bills);
 
@@ -202,6 +207,7 @@ class ProjectionService
         return [
             'opening_balance' => round($openingForWindow, 2),
             'current_balance' => $effectiveCurrent !== null ? round($effectiveCurrent, 2) : null,
+            'align_to_current'=> $alignToCurrent,
             'has_today'       => $rangeHasToday,
             'total_in'        => round($totalIn, 2),
             'total_out'       => round($totalOut, 2),

@@ -217,6 +217,41 @@
             </div>
         </div>
 
+
+
+        <div class="rounded-2xl border border-neutral-200/70 dark:border-neutral-800/70 bg-white dark:bg-neutral-900 p-4 md:p-5">
+            <div class="flex items-center justify-between">
+                <p class="font-medium">Maiores gastos no mês</p>
+                <small class="text-neutral-500">com limite da categoria</small>
+            </div>
+
+            <ul class="mt-3 divide-y divide-neutral-200/70 dark:divide-neutral-800/70">
+                @forelse($topCategoryLimits as $cat)
+                    <li class="py-3 grid grid-cols-[1fr_auto] gap-3 items-center">
+                        <div>
+                            <p class="text-sm font-medium">{{ $cat['name'] }}</p>
+                            <p class="text-xs text-neutral-500 dark:text-neutral-400">
+                                Gasto: <strong>{{ $cat['spent_brl'] }}</strong>
+                                @if($cat['monthly_limit_brl'])
+                                    · Limite: <strong>{{ $cat['monthly_limit_brl'] }}</strong>
+                                @endif
+                            </p>
+                        </div>
+                        <div class="text-right">
+                            @if($cat['available_brl'])
+                                <p class="text-xs text-neutral-500 dark:text-neutral-400">Disponível</p>
+                                <p class="text-sm font-semibold {{ $cat['available'] <= 0 ? 'text-red-600' : 'text-emerald-600' }}">{{ $cat['available_brl'] }}</p>
+                            @else
+                                <p class="text-xs text-neutral-400">Sem limite</p>
+                            @endif
+                        </div>
+                    </li>
+                @empty
+                    <li class="py-3 text-sm text-neutral-500">Sem categorias com gasto neste mês.</li>
+                @endforelse
+            </ul>
+        </div>
+
         <!-- Transactions Recent -->
         <div
             class="rounded-2xl border border-neutral-200/70 dark:border-neutral-800/70 bg-white dark:bg-neutral-900 p-4 md:p-5">
@@ -315,6 +350,34 @@
                    required>
         </label>
     </div>
+    <div id="adjust_scope_wrap" class="mt-3 hidden rounded-xl border border-neutral-200/70 dark:border-neutral-800/70 p-3">
+        <p class="text-xs text-neutral-500 dark:text-neutral-400 mb-2">Transação recorrente</p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <label class="inline-flex items-center gap-2"><input type="radio" name="scope" value="occurrence" id="adj_scope_occ"><span>Somente esse mês</span></label>
+            <label class="inline-flex items-center gap-2"><input type="radio" name="scope" value="series" id="adj_scope_series" checked><span>Alterar recorrência para essa data</span></label>
+        </div>
+        <input type="hidden" name="reference_date" id="adjust_reference_date">
+    </div>
+</x-modal>
+
+<x-modal id="adjustModal" titleCreate="Ajustar transação" titleEdit="Ajustar transação" titleShow="Ajustar transação" submitLabel="Salvar ajuste">
+    @csrf
+    @method('PATCH')
+    <input type="hidden" name="transaction_id" id="adjust_transaction_id">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <label class="block">
+            <span class="text-xs text-neutral-500 dark:text-neutral-400">Novo valor</span>
+            <input type="text" inputmode="decimal" name="amount" id="adjust_amount"
+                   class="mt-1 w-full rounded-xl border border-neutral-200/70 dark:border-neutral-800/70 bg-white/90 dark:bg-neutral-900/70 px-3 py-2"
+                   required>
+        </label>
+        <label class="block">
+            <span class="text-xs text-neutral-500 dark:text-neutral-400">Nova data</span>
+            <input type="date" name="date" id="adjust_date"
+                   class="mt-1 w-full rounded-xl border border-neutral-200/70 dark:border-neutral-800/70 bg-white/90 dark:bg-neutral-900/70 px-3 py-2"
+                   required>
+        </label>
+    </div>
 </x-modal>
 
     @push('scripts')
@@ -340,6 +403,7 @@
 
             const PAY_TPL = @json(route('transaction-payment', ['transaction' => '__ID__']));
             const INVOICE_PAY_TPL = @json(route('invoice-payment.update', ['cardId' => '__CARD__', 'ym' => '__YM__']));
+            const ADJUST_TPL = @json(route('transaction-adjust', ['transaction' => '__ID__']));
             let CURRENT_TX_CARD = null;
             let CURRENT_ID = null, CURRENT_TITLE = null, CURRENT_DUE_DATE = null;
 
@@ -353,6 +417,26 @@
 }
 
 
+
+            function getAdjustEls() {
+                const modal = document.getElementById('adjustModal');
+                const form = modal?.querySelector('form');
+                const inAmt = modal?.querySelector('#adjust_amount,[name="amount"]');
+                const inDate = modal?.querySelector('#adjust_date,[name="date"]');
+                return {modal, form, inAmt, inDate};
+            }
+
+            function showAdjustModal() {
+                const {modal} = getAdjustEls();
+                modal?.classList.remove('hidden');
+                document.body.classList.add('overflow-hidden', 'ui-modal-open');
+            }
+
+            function hideAdjustModal() {
+                const {modal} = getAdjustEls();
+                modal?.classList.add('hidden');
+                document.body.classList.remove('overflow-hidden', 'ui-modal-open');
+            }
 
             function showPaymentModal() {
                 const {modal} = getPaymentEls();
@@ -420,6 +504,32 @@
 
             document.addEventListener('click', (e) => {
     const btnPayTx = e.target.closest('[data-open-payment]');
+    const btnAdjustTx = e.target.closest('[data-open-adjust]');
+    if (btnAdjustTx) {
+        CURRENT_ID = btnAdjustTx.dataset.id || null;
+        const {form, inAmt, inDate} = getAdjustEls();
+        const scopeWrap = document.getElementById('adjust_scope_wrap');
+        const scopeOcc = document.getElementById('adj_scope_occ');
+        const scopeSeries = document.getElementById('adj_scope_series');
+        const refInput = document.getElementById('adjust_reference_date');
+        if (!CURRENT_ID || !form) return;
+        form.action = ADJUST_TPL.replace('__ID__', CURRENT_ID);
+        if (inAmt) inAmt.value = Number(btnAdjustTx.dataset.amount || 0).toFixed(2).replace('.', ',');
+        const baseDate = (btnAdjustTx.dataset.date || '').slice(0, 10);
+        if (inDate) inDate.value = baseDate;
+        if (refInput) refInput.value = baseDate;
+
+        const recType = (btnAdjustTx.dataset.recurrenceType || 'unique').toLowerCase();
+        const recurring = recType !== 'unique';
+        scopeWrap?.classList.toggle('hidden', !recurring);
+        if (scopeOcc && scopeSeries) {
+            scopeSeries.checked = true;
+            scopeOcc.checked = false;
+        }
+        showAdjustModal();
+        return;
+    }
+
     if (btnPayTx) {
         const {form, inAmt, inDate, dueHidden} = getPaymentEls();
         if (!form) {
@@ -634,6 +744,45 @@ if (dueHidden)  dueHidden.value = CURRENT_DUE_DATE; // aqui ele passa 29/12/2025
                 }
             });
 
+            document.getElementById('adjustModal')?.addEventListener('submit', async (e) => {
+                const form = e.target;
+                if (form.tagName !== 'FORM') return;
+                e.preventDefault();
+
+                const {inAmt, inDate} = getAdjustEls();
+                const fd = new FormData(form);
+                fd.append('_method', 'PATCH');
+
+                try {
+                    const resp = await fetch(form.action, {
+                        method: 'POST',
+                        headers: {'X-CSRF-TOKEN': "{{ csrf_token() }}", 'Accept': 'application/json'},
+                        body: fd,
+                        credentials: 'same-origin'
+                    });
+                    if (resp.status === 422) {
+                        const j = await resp.json();
+                        throw new Error(Object.values(j.errors || {})[0]?.[0] || 'Dados inválidos.');
+                    }
+                    if (!resp.ok) throw new Error(await resp.text());
+
+                    const payload = await resp.json();
+                    const cal = window.__cal;
+                    if (cal) {
+                        const oldSelected = cal.fp.selectedDates?.[0] ? cal.iso(cal.fp.selectedDates[0]) : null;
+                        const newDate = (payload?.date || inDate?.value || '').slice(0, 10);
+                        const ym = (newDate || oldSelected || cal.iso(new Date())).slice(0, 7);
+                        await cal.loadWindow(ym, 2, true);
+                        cal.fp.redraw();
+                        cal.exibirEventos(newDate || oldSelected || cal.iso(new Date()));
+                    }
+
+                    hideAdjustModal();
+                } catch (err) {
+                    alert('Erro ao ajustar transação: ' + (err.message || ''));
+                }
+            });
+
             (function calendarBoot() {
                 const routeUrl = "{{ route('calendar.events') }}";
                 const ym = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -673,8 +822,9 @@ if (dueHidden)  dueHidden.value = CURRENT_DUE_DATE; // aqui ele passa 29/12/2025
                     if (!map.has(key)) map.set(key, item);
                 }
 
-                async function loadWindow(ymStr, months = 2) {
+                async function loadWindow(ymStr, months = 2, force = false) {
                     const key = `${ymStr}:${months}`;
+                    if (force) loadedWindows.delete(key);
                     if (loadedWindows.has(key)) return;
                     const resp = await fetch(`${routeUrl}?start=${ymStr}&months=${months}`, {headers: {'Accept': 'application/json'}});
                     if (!resp.ok) return;
@@ -737,11 +887,16 @@ if (dueHidden)  dueHidden.value = CURRENT_DUE_DATE; // aqui ele passa 29/12/2025
                     data-pay-invoice data-card="${ev.card_id}" data-month="${ev.current_month}"
                     data-amount="${Math.abs(ev.valor || 0)}" data-title="${escAttr(ev.descricao)}">
                     <i class="fa-solid fa-check text-green-600"></i></button>`;
-                        } else if ((ev.tipo === 'despesa' || ev.tipo === 'entrada') && ev.tx_id && !ev.paid) {
-                            action = `<button type="button" class="bg-transparent border-0"
+                        } else if ((ev.tipo === 'despesa' || ev.tipo === 'entrada' || ev.tipo === 'investimento') && ev.tx_id) {
+                            const payBtn = !ev.paid ? `<button type="button" class="bg-transparent border-0"
                     data-open-payment data-id="${ev.tx_id}"
                     data-amount="${Math.abs(ev.valor)}" data-date="${dateStr}" data-title="${escAttr(ev.descricao)}">
-                    <i class="fa-solid fa-check-to-slot text-green-600"></i></button>`;
+                    <i class="fa-solid fa-check-to-slot text-green-600"></i></button>` : '';
+                            const editBtn = `<button type="button" class="bg-transparent border-0"
+                    data-open-adjust data-id="${ev.tx_id}"
+                    data-amount="${Math.abs(ev.valor)}" data-date="${dateStr}" data-recurrence-type="${ev.recurrence_type || 'unique'}">
+                    <i class="fa-solid fa-pen-to-square text-brand-600"></i></button>`;
+                            action = `${payBtn}${editBtn}`;
                         }
 
                         html += `
@@ -904,7 +1059,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // resto igual
-    window.__cal = { fp, eventosCache, exibirEventos, iso };
+    window.__cal = { fp, eventosCache, exibirEventos, iso, loadWindow };
 });
             })();
         </script>
