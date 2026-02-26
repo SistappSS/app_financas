@@ -27,8 +27,11 @@ class AsaasWebhookController extends Controller
             return response()->json(['ok' => false, 'message' => 'Invalid webhook token'], 401);
         }
 
-        $event = (string) $request->input('event');
+        $event = strtoupper((string) $request->input('event'));
         $paymentNode = $request->input('payment');
+        $paymentStatus = strtoupper((string) ($request->input('payment.status')
+            ?? (is_array($paymentNode) ? ($paymentNode['status'] ?? null) : null)
+            ?? ''));
 
         $paymentId = (string) ($request->input('payment.id')
             ?? (is_array($paymentNode) ? ($paymentNode['id'] ?? null) : $paymentNode));
@@ -58,11 +61,20 @@ class AsaasWebhookController extends Controller
             return response()->json(['ok' => true]);
         }
 
-        if (in_array($event, ['PAYMENT_RECEIVED', 'PAYMENT_CONFIRMED'], true)) {
+        $payment->update([
+            'payload' => [
+                'event' => $event,
+                'body' => $request->all(),
+            ],
+        ]);
+
+        if (in_array($event, ['PAYMENT_RECEIVED', 'PAYMENT_CONFIRMED'], true)
+            || in_array($paymentStatus, ['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'], true)) {
             $this->subscriptionService->markPaymentReceived($payment);
         }
 
-        if (in_array($event, ['PAYMENT_OVERDUE', 'PAYMENT_DELETED', 'PAYMENT_REFUNDED'], true)) {
+        if (in_array($event, ['PAYMENT_OVERDUE', 'PAYMENT_DELETED', 'PAYMENT_REFUNDED'], true)
+            || in_array($paymentStatus, ['OVERDUE', 'DELETED', 'REFUNDED'], true)) {
             $payment->update(['status' => 'failed']);
             $this->subscriptionService->syncUserAccess($payment->user);
         }

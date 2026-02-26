@@ -6,6 +6,7 @@ use App\Models\Auth\User;
 use App\Models\Subscription;
 use App\Models\SubscriptionPayment;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Validation\ValidationException;
 
@@ -68,17 +69,31 @@ class SubscriptionService
         $state = $this->syncUserAccess($user);
         $windowDays = (int) config('asaas.plan.renewal_alert_days', 3);
 
+        $renewalStartDate = null;
+
         if ($state['is_trial'] && $state['trial_ends_at']) {
             $daysToTrialEnd = now()->diffInDays($state['trial_ends_at'], false);
             if ($daysToTrialEnd > $windowDays) {
-                return [false, 'Pagamento liberado apenas nos últimos 3 dias do período grátis.'];
+                $renewalStartDate = $state['trial_ends_at']->copy()->subDays($windowDays);
+
+                return [
+                    false,
+                    'Pagamento liberado apenas nos últimos '.$windowDays.' dias do período grátis. '
+                    .'Nova cobrança liberada a partir de '.$renewalStartDate->format('d/m/Y H:i').'.',
+                ];
             }
         }
 
         if ($state['is_subscriber'] && $state['subscriber_until']) {
             $daysToExpire = now()->diffInDays($state['subscriber_until'], false);
             if ($daysToExpire > $windowDays) {
-                return [false, 'Assinante até '.$state['subscriber_until']->format('d/m/Y H:i').'. O pagamento só é liberado nos 3 dias finais.'];
+                $renewalStartDate = $state['subscriber_until']->copy()->subDays($windowDays);
+
+                return [
+                    false,
+                    'Assinante até '.$state['subscriber_until']->format('d/m/Y H:i').
+                    '. Nova cobrança liberada a partir de '.$renewalStartDate->format('d/m/Y H:i').'.',
+                ];
             }
         }
 
@@ -166,28 +181,42 @@ class SubscriptionService
 
     public function markPaymentReceived(SubscriptionPayment $payment): void
     {
-        $payment->loadMissing('user', 'subscription');
+        DB::transaction(function () use ($payment) {
+            $lockedPayment = SubscriptionPayment::query()
+                ->whereKey($payment->id)
+                ->lockForUpdate()
+                ->first();
 
-        if ($payment->status === 'received') {
-            return;
-        }
+            if (!$lockedPayment) {
+                return;
+            }
 
-        $subscription = $payment->subscription ?: $this->bootstrapSubscription($payment->user);
+            $lockedPayment->loadMissing('user', 'subscription');
 
-        $endsAt = Carbon::now()->addDays((int) config('asaas.plan.billing_cycle_days', 30));
+            if ($lockedPayment->status === 'received') {
+                return;
+            }
 
-        $subscription->update([
-            'status' => 'active',
-            'current_period_ends_at' => $endsAt,
-            'meta' => ['last_payment_id' => $payment->id],
-        ]);
+            $subscription = $lockedPayment->subscription ?: $this->bootstrapSubscription($lockedPayment->user);
+            $basePeriod = $subscription->current_period_ends_at && $subscription->current_period_ends_at->isFuture()
+                ? $subscription->current_period_ends_at
+                : Carbon::now();
 
-        $payment->update([
-            'status' => 'received',
-            'paid_at' => now(),
-        ]);
+            $endsAt = $basePeriod->copy()->addDays((int) config('asaas.plan.billing_cycle_days', 30));
 
-        $payment->user->forceFill(['subscription_expires_at' => $endsAt])->save();
-        $this->syncUserAccess($payment->user->fresh());
+            $subscription->update([
+                'status' => 'active',
+                'current_period_ends_at' => $endsAt,
+                'meta' => array_merge($subscription->meta ?? [], ['last_payment_id' => $lockedPayment->id]),
+            ]);
+
+            $lockedPayment->update([
+                'status' => 'received',
+                'paid_at' => now(),
+            ]);
+
+            $lockedPayment->user->forceFill(['subscription_expires_at' => $endsAt])->save();
+            $this->syncUserAccess($lockedPayment->user->fresh());
+        });
     }
 }
