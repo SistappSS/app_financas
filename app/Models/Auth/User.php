@@ -51,8 +51,7 @@ class User extends Authenticatable
         'is_active',
         'trial_ends_at',
         'subscription_expires_at',
-        'asaas_customer_id',
-        'cpf_cnpj'
+        'asaas_customer_id'
     ];
 
     /**

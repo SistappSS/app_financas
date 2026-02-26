@@ -84,7 +84,6 @@ class AuthController extends Controller
         $this->guard->logout();
 
         if ($request->hasSession()) {
-            $request->session()->invalidate();
             $request->session()->regenerateToken();
         }
 
