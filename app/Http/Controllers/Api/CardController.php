@@ -11,6 +11,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Auth;
+use App\Services\Billing\SubscriptionService;
 
 class CardController extends Controller
 {
@@ -47,6 +48,7 @@ class CardController extends Controller
 
     public function store(Request $request)
     {
+        app(SubscriptionService::class)->enforceCreateLimit($request->user(), 'cards', Card::class);
         $card = $this->card->with('account')->create([
             'user_id' => Auth::id(),
             'account_id' => $request->account_id,

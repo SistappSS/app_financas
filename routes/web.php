@@ -4,6 +4,8 @@ use App\Http\Controllers\DailyDigestController;
 use App\Http\Controllers\ProjectionController;
 use App\Http\Controllers\PushController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Billing\SubscriptionController;
+use App\Http\Controllers\Billing\AsaasWebhookController;
 
 // Auth
 use App\Http\Controllers\Auth\AuthController;
@@ -127,6 +129,11 @@ Route::middleware(['auth', config('jetstream.auth_session')])->group(function ()
         // Charts
         Route::get('/api/analytics/pie', [ChartController::class, 'pie'])->name('analytics.pie');
 
+
+        // Billing / Assinatura
+        Route::get('/billing/subscription', [SubscriptionController::class, 'summary'])->name('billing.subscription.summary');
+        Route::post('/billing/subscription/checkout-pix', [SubscriptionController::class, 'checkoutPix'])->name('billing.subscription.checkout-pix');
+
         Route::prefix('support')
             ->name('support.')
             ->group(function () {
@@ -142,3 +149,5 @@ Route::middleware(['auth', config('jetstream.auth_session')])->group(function ()
 
 // Push Notifications
 Route::get('/vapid-public-key', fn() => response(trim(env('VAPID_PUBLIC_KEY')), 200, ['Content-Type' => 'text/plain']));
+
+Route::post('/webhooks/asaas', AsaasWebhookController::class)->name('webhooks.asaas');

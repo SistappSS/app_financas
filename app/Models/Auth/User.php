@@ -48,7 +48,10 @@ class User extends Authenticatable
         'email',
         'password',
         'image',
-        'is_active'
+        'is_active',
+        'trial_ends_at',
+        'subscription_expires_at',
+        'asaas_customer_id'
     ];
 
     /**
@@ -82,6 +85,8 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'trial_ends_at' => 'datetime',
+            'subscription_expires_at' => 'datetime',
         ];
     }
 
@@ -93,6 +98,17 @@ class User extends Authenticatable
     public function canAuthenticate()
     {
         return true;
+    }
+
+
+    public function subscription(): HasOne
+    {
+        return $this->hasOne(\App\Models\Subscription::class);
+    }
+
+    public function subscriptionPayments(): HasMany
+    {
+        return $this->hasMany(\App\Models\SubscriptionPayment::class);
     }
 
     public function accounts() { return $this->hasMany(Account::class); }

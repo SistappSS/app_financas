@@ -68,6 +68,7 @@ class AuthController extends Controller
             'email' => $request->email,
             'password' => Hash::make($request->password),
             'is_active' => 1,
+            'trial_ends_at' => Carbon::now()->addDays((int) config('asaas.plan.trial_days', 14)),
             'created_at' => Carbon::now()
         ])->assignRole('user');
 
