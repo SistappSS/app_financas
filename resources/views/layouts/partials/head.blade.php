@@ -35,10 +35,13 @@
 
     <script>
         (function () {
-            window.addEventListener('pageshow', function (event) {
-                if (!event.persisted) return;
+            const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+            if (!isStandalone) return;
 
-                window.location.reload();
+            window.addEventListener('pageshow', function (event) {
+                if (event.persisted) {
+                    window.location.reload();
+                }
             });
         })();
     </script>

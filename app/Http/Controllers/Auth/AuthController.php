@@ -107,15 +107,13 @@ class AuthController extends Controller
     private function authPageResponse(Request $request, string $view): Response
     {
         if ($request->hasSession()) {
-            $request->session()->invalidate();
             $request->session()->regenerateToken();
         }
 
         return response()
             ->view($view)
-            ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0, private')
+            ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
             ->header('Pragma', 'no-cache')
-            ->header('Expires', '0')
-            ->header('Vary', 'Cookie');
+            ->header('Expires', '0');
     }
 }
