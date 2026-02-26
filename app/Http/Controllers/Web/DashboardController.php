@@ -833,6 +833,34 @@ class DashboardController extends Controller
 
     }
 
+
+    public function adjustTransaction(Request $request, Transaction $transaction)
+    {
+        $ownerId = AdditionalUser::ownerIdFor();
+        $userIds = AdditionalUser::where('user_id', $ownerId)
+            ->pluck('linked_user_id')->push($ownerId)->unique()->values();
+
+        abort_unless(in_array($transaction->user_id, $userIds->all()), 403);
+
+        $data = $request->validate([
+            'amount' => ['required', 'numeric', 'min:0.01'],
+            'date' => ['required', 'date'],
+        ]);
+
+        $transaction->update([
+            'amount' => (float) $data['amount'],
+            'date' => Carbon::parse($data['date'])->toDateString(),
+        ]);
+
+        return response()->json([
+            'ok' => true,
+            'transaction_id' => (string) $transaction->id,
+            'amount' => (float) $transaction->amount,
+            'amount_brl' => brlPrice($transaction->amount),
+            'date' => Carbon::parse($transaction->date)->toDateString(),
+        ]);
+    }
+
     public function paymentTransaction(Request $request, Transaction $transaction)
 {
     // ==== NORMALIZAÇÃO DO VALOR (pt-BR -> padrão numérico) ====
