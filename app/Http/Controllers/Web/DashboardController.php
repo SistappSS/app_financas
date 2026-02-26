@@ -874,9 +874,9 @@ class DashboardController extends Controller
 
         $data = $request->validate([
             'amount' => ['required', 'numeric', 'min:0.01'],
-            'date' => ['required', 'date'],
+            'date' => ['required', 'date', 'after_or_equal:today'],
             'scope' => ['nullable', 'in:series,occurrence'],
-            'reference_date' => ['nullable', 'date'],
+            'reference_date' => ['nullable', 'date', 'after_or_equal:today'],
         ]);
 
         $scope = $data['scope'] ?? 'series';
@@ -991,7 +991,7 @@ class DashboardController extends Controller
 
     $data = $request->validate([
         'amount'       => ['required', 'numeric'],
-        'payment_date' => ['required', 'date'],
+        'payment_date' => ['required', 'date', 'before_or_equal:today'],
         'month'        => ['nullable', 'date_format:Y-m'], // mês selecionado na UI (para recalcular KPIs)
         'due_date'     => ['nullable', 'date'],            // NOVO: data da ocorrência/vencimento
         'account_id'   => ['nullable', 'integer'],
