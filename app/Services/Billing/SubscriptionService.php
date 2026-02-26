@@ -30,23 +30,82 @@ class SubscriptionService
         );
     }
 
-    public function isActive(User $user): bool
+    public function getState(User $user): array
     {
         $subscription = $this->bootstrapSubscription($user);
-        $now = now();
 
-        if ($subscription->current_period_ends_at && $subscription->current_period_ends_at->isFuture()) {
-            return true;
+        $trialEndsAt = $subscription->trial_ends_at;
+        $subscriberUntil = $subscription->current_period_ends_at;
+
+        $isTrial = $trialEndsAt && $trialEndsAt->isFuture();
+
+        $graceDays = (int) config('asaas.plan.access_grace_days_after_due', 2);
+        $renewalAlertDays = (int) config('asaas.plan.renewal_alert_days', 3);
+
+        $graceUntil = $subscriberUntil?->copy()->addDays($graceDays);
+        $isSubscriber = $subscriberUntil && $graceUntil && now()->lte($graceUntil);
+
+        $isRenewalAlert = $subscriberUntil
+            && now()->lte($subscriberUntil)
+            && now()->diffInDays($subscriberUntil, false) <= $renewalAlertDays;
+
+        $hasAccess = $user->hasRole('admin') || $isTrial || $isSubscriber;
+
+        return [
+            'subscription' => $subscription,
+            'is_trial' => (bool) $isTrial,
+            'is_subscriber' => (bool) $isSubscriber,
+            'has_access' => (bool) $hasAccess,
+            'is_renewal_alert' => (bool) $isRenewalAlert,
+            'trial_ends_at' => $trialEndsAt,
+            'subscriber_until' => $subscriberUntil,
+            'grace_until' => $graceUntil,
+        ];
+    }
+
+    public function syncUserAccess(User $user): array
+    {
+        $state = $this->getState($user);
+        $subscription = $state['subscription'];
+
+        if (!$user->hasRole('admin') && !$user->hasRole('additional_user')) {
+            $role = 'user';
+
+            if ($state['is_trial']) {
+                $role = 'trials';
+            } elseif ($state['is_subscriber']) {
+                $role = 'subscript';
+            }
+
+            if (!$user->hasRole($role)) {
+                $user->syncRoles([$role]);
+            }
         }
 
-        return $subscription->trial_ends_at && $subscription->trial_ends_at->isFuture();
+        $status = 'inactive';
+        if ($state['is_trial']) {
+            $status = 'trialing';
+        } elseif ($state['is_subscriber']) {
+            $status = 'active';
+        }
+
+        $subscription->update([
+            'status' => $status,
+            'trial_ends_at' => $state['trial_ends_at'],
+            'current_period_ends_at' => $state['subscriber_until'],
+        ]);
+
+        return $state;
+    }
+
+    public function isActive(User $user): bool
+    {
+        return $this->syncUserAccess($user)['has_access'];
     }
 
     public function isTrial(User $user): bool
     {
-        $subscription = $this->bootstrapSubscription($user);
-
-        return $subscription->trial_ends_at && $subscription->trial_ends_at->isFuture();
+        return $this->syncUserAccess($user)['is_trial'];
     }
 
     public function enforceCreateLimit(User $user, string $key, string $modelClass): void
@@ -85,13 +144,14 @@ class SubscriptionService
 
     public function markPaymentReceived(SubscriptionPayment $payment): void
     {
+        $payment->loadMissing('user', 'subscription');
         $subscription = $payment->subscription ?: $this->bootstrapSubscription($payment->user);
 
         $baseDate = $subscription->current_period_ends_at && $subscription->current_period_ends_at->isFuture()
             ? $subscription->current_period_ends_at
             : Carbon::now();
 
-        $endsAt = $baseDate->copy()->addMonth();
+        $endsAt = $baseDate->copy()->addDays((int) config('asaas.plan.billing_cycle_days', 30));
 
         $subscription->update([
             'status' => 'active',
@@ -105,5 +165,6 @@ class SubscriptionService
         ]);
 
         $payment->user->forceFill(['subscription_expires_at' => $endsAt])->save();
+        $this->syncUserAccess($payment->user->fresh());
     }
 }

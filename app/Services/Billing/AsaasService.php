@@ -54,6 +54,11 @@ class AsaasService
         ])->throw();
     }
 
+    public function getPayment(string $paymentId): array
+    {
+        return $this->client()->get('/payments/'.$paymentId)->throw()->json();
+    }
+
     public function createPixPayment(string $customerId, array $payload): array
     {
         $payment = $this->client()->post('/payments', [

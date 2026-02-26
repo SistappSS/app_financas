@@ -135,19 +135,25 @@
                         Plano {{ $subscription->plan_name }} — R$ {{ number_format($subscription->amount, 2, ',', '.') }}/mês
                     </p>
                 </div>
-                <span class="px-2 py-1 rounded-full text-[11px] {{ $subscriptionHasAccess ? 'badge-active' : 'badge-inactive' }}">
+                <span id="subscriptionAccessBadge" class="px-2 py-1 rounded-full text-[11px] {{ $subscriptionHasAccess ? 'badge-active' : 'badge-inactive' }}">
                     {{ $subscriptionHasAccess ? 'Acesso completo' : 'Acesso limitado' }}
                 </span>
             </div>
 
-            <div class="mt-3 text-xs">
-                @if($subscriptionIsTrial)
-                    <p>Período grátis até <strong>{{ optional($subscription->trial_ends_at)->format('d/m/Y H:i') }}</strong>.</p>
-                @elseif($subscription->current_period_ends_at)
-                    <p>Assinatura válida até <strong>{{ $subscription->current_period_ends_at->format('d/m/Y H:i') }}</strong>.</p>
+            <div class="mt-3 text-xs" id="subscriptionStatusText">
+                @if($subscriptionIsSubscriber && $subscriptionSubscriberUntil)
+                    <p>Assinante até <strong>{{ $subscriptionSubscriberUntil->format('d/m/Y H:i') }}</strong>.</p>
+                @elseif($subscriptionIsTrial)
+                    <p>Período grátis até <strong>{{ optional($subscriptionTrialEndsAt)->format('d/m/Y H:i') }}</strong>.</p>
+                @elseif($subscriptionGraceUntil)
+                    <p>Seu plano venceu. Renove até <strong>{{ $subscriptionGraceUntil->format('d/m/Y H:i') }}</strong> para não perder acesso.</p>
                 @else
                     <p>Seu período grátis encerrou. Gere um PIX para renovar seu acesso.</p>
                 @endif
+            </div>
+
+            <div id="subscriptionRenewAlert" class="{{ $subscriptionIsRenewalAlert ? '' : 'hidden' }} mt-2 text-[11px] px-2 py-1 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                Renove seu plano para não perder acesso...
             </div>
 
             <div class="mt-3 flex flex-wrap items-center gap-2">
@@ -253,6 +259,9 @@
                 const modalSubscriptionDocument = document.getElementById('modalSubscriptionDocument');
                 const subscriptionDocumentForm = document.getElementById('subscriptionDocumentForm');
                 const subscriptionDocumentInput = document.getElementById('subscriptionDocumentInput');
+                const subscriptionStatusText = document.getElementById('subscriptionStatusText');
+                const subscriptionAccessBadge = document.getElementById('subscriptionAccessBadge');
+                const subscriptionRenewAlert = document.getElementById('subscriptionRenewAlert');
 
                 if (!modal || !formEl || !list) {
                     console.warn('Modal, formUser ou userList não encontrados.');
@@ -525,12 +534,76 @@
                         const rows = await resp.json();
                         list.innerHTML = '';
                         rows.forEach(storeRow);
+                        await refreshSubscriptionSummary();
                     } catch (err) {
                         console.error(err);
                     }
                 }
 
 
+
+
+                function formatDateTime(value) {
+                    if (!value) return '';
+                    return new Date(value).toLocaleString('pt-BR', {
+                        day: '2-digit', month: '2-digit', year: 'numeric',
+                        hour: '2-digit', minute: '2-digit'
+                    });
+                }
+
+                function renderSubscriptionSummary(summary) {
+                    loggedUserCpfCnpj = summary.cpf_cnpj || loggedUserCpfCnpj;
+
+                    if (subscriptionAccessBadge) {
+                        const hasAccess = !!summary.has_access;
+                        subscriptionAccessBadge.textContent = hasAccess ? 'Acesso completo' : 'Acesso limitado';
+                        subscriptionAccessBadge.classList.toggle('badge-active', hasAccess);
+                        subscriptionAccessBadge.classList.toggle('badge-inactive', !hasAccess);
+                    }
+
+                    if (subscriptionStatusText) {
+                        if (summary.is_subscriber && summary.subscriber_until) {
+                            subscriptionStatusText.innerHTML = `<p>Assinante até <strong>${formatDateTime(summary.subscriber_until)}</strong>.</p>`;
+                        } else if (summary.is_trial && summary.trial_ends_at) {
+                            subscriptionStatusText.innerHTML = `<p>Período grátis até <strong>${formatDateTime(summary.trial_ends_at)}</strong>.</p>`;
+                        } else if (summary.grace_until) {
+                            subscriptionStatusText.innerHTML = `<p>Seu plano venceu. Renove até <strong>${formatDateTime(summary.grace_until)}</strong> para não perder acesso.</p>`;
+                        } else {
+                            subscriptionStatusText.innerHTML = '<p>Seu período grátis encerrou. Gere um PIX para renovar seu acesso.</p>';
+                        }
+                    }
+
+                    subscriptionRenewAlert?.classList.toggle('hidden', !summary.is_renewal_alert);
+
+                    const pendingPayment = summary.pending_payment;
+
+                    if (pendingPayment?.pix_copy_paste && pendingPayment?.pix_qr_code) {
+                        pixResult?.classList.remove('hidden');
+                        if (pixCopyPaste) pixCopyPaste.value = pendingPayment.pix_copy_paste;
+                        if (pixQrImage) pixQrImage.src = `data:image/png;base64,${pendingPayment.pix_qr_code}`;
+
+                        if (subscriptionInvoiceLink && pendingPayment.invoice_url) {
+                            subscriptionInvoiceLink.classList.remove('hidden');
+                            subscriptionInvoiceLink.href = pendingPayment.invoice_url;
+                        }
+                    } else {
+                        pixResult?.classList.add('hidden');
+                        if (pixCopyPaste) pixCopyPaste.value = '';
+                        if (pixQrImage) pixQrImage.removeAttribute('src');
+                        subscriptionInvoiceLink?.classList.add('hidden');
+                    }
+                }
+
+                async function refreshSubscriptionSummary() {
+                    const resp = await fetch("{{ route('billing.subscription.summary') }}", {
+                        headers: { 'Accept': 'application/json' }
+                    });
+
+                    if (!resp.ok) return;
+
+                    const summary = await resp.json();
+                    renderSubscriptionSummary(summary);
+                }
 
                 const closeDocumentModal = () => {
                     modalSubscriptionDocument?.classList.add('hidden');
@@ -570,6 +643,8 @@
                         subscriptionInvoiceLink.classList.remove('hidden');
                         subscriptionInvoiceLink.href = payload.invoice_url;
                     }
+
+                    await refreshSubscriptionSummary();
                 }
 
                 subscriptionDocumentForm?.addEventListener('submit', async (e) => {

@@ -19,23 +19,36 @@ class SubscriptionController extends Controller
     public function summary(Request $request)
     {
         $user = $request->user();
-        $subscription = $this->subscriptionService->bootstrapSubscription($user);
+        $state = $this->subscriptionService->syncUserAccess($user);
+        $subscription = $state['subscription'];
 
         $latestPayment = SubscriptionPayment::query()
             ->where('user_id', $user->id)
             ->latest()
             ->first();
 
+        if ($latestPayment && $latestPayment->status === 'pending' && $latestPayment->asaas_payment_id) {
+            $this->syncPaymentFromGateway($latestPayment);
+            $latestPayment = $latestPayment->fresh();
+            $state = $this->subscriptionService->syncUserAccess($user->fresh());
+        }
+
+        $pendingPayment = $latestPayment && $latestPayment->status === 'pending' ? $latestPayment : null;
+
         return response()->json([
             'plan_name' => $subscription->plan_name,
             'amount' => $subscription->amount,
             'status' => $subscription->status,
-            'trial_ends_at' => optional($subscription->trial_ends_at)?->toDateTimeString(),
-            'current_period_ends_at' => optional($subscription->current_period_ends_at)?->toDateTimeString(),
-            'is_trial' => $this->subscriptionService->isTrial($user),
-            'has_access' => $this->subscriptionService->isActive($user),
+            'trial_ends_at' => optional($state['trial_ends_at'])?->toDateTimeString(),
+            'subscriber_until' => optional($state['subscriber_until'])?->toDateTimeString(),
+            'grace_until' => optional($state['grace_until'])?->toDateTimeString(),
+            'is_trial' => $state['is_trial'],
+            'is_subscriber' => $state['is_subscriber'],
+            'has_access' => $state['has_access'],
+            'is_renewal_alert' => $state['is_renewal_alert'],
             'cpf_cnpj' => $user->cpf_cnpj,
             'latest_payment' => $latestPayment,
+            'pending_payment' => $pendingPayment,
         ]);
     }
 
@@ -75,6 +88,21 @@ class SubscriptionController extends Controller
 
         $subscription = $this->subscriptionService->bootstrapSubscription($user);
 
+        $openPending = SubscriptionPayment::query()
+            ->where('user_id', $user->id)
+            ->where('status', 'pending')
+            ->latest()
+            ->first();
+
+        if ($openPending && $openPending->asaas_payment_id) {
+            $this->syncPaymentFromGateway($openPending);
+            $openPending = $openPending->fresh();
+
+            if ($openPending && $openPending->status === 'pending') {
+                return response()->json($openPending);
+            }
+        }
+
         $customerId = $this->asaasService->ensureCustomer($user);
         $user->forceFill(['asaas_customer_id' => $customerId])->save();
 
@@ -105,5 +133,28 @@ class SubscriptionController extends Controller
         ]);
 
         return response()->json($pending->fresh(), 201);
+    }
+
+    private function syncPaymentFromGateway(SubscriptionPayment $payment): void
+    {
+        try {
+            $gatewayPayment = $this->asaasService->getPayment((string) $payment->asaas_payment_id);
+        } catch (\Throwable $exception) {
+            return;
+        }
+
+        $gatewayStatus = strtoupper((string) ($gatewayPayment['status'] ?? ''));
+
+        if (in_array($gatewayStatus, ['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'], true)) {
+            $this->subscriptionService->markPaymentReceived($payment);
+            return;
+        }
+
+        if (in_array($gatewayStatus, ['OVERDUE', 'DELETED', 'REFUNDED'], true)) {
+            $payment->update(['status' => 'failed', 'payload' => $gatewayPayment]);
+            return;
+        }
+
+        $payment->update(['status' => 'pending', 'payload' => $gatewayPayment]);
     }
 }

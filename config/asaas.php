@@ -15,6 +15,9 @@ return [
         'amount' => (float) env('SUBSCRIPTION_PLAN_AMOUNT', 29.90),
         'trial_days' => (int) env('SUBSCRIPTION_TRIAL_DAYS', 14),
         'grace_days_for_pix' => (int) env('SUBSCRIPTION_PIX_DUE_DAYS', 2),
+        'billing_cycle_days' => (int) env('SUBSCRIPTION_BILLING_CYCLE_DAYS', 30),
+        'renewal_alert_days' => (int) env('SUBSCRIPTION_RENEWAL_ALERT_DAYS', 3),
+        'access_grace_days_after_due' => (int) env('SUBSCRIPTION_ACCESS_GRACE_DAYS', 2),
     ],
 
     'limits' => [

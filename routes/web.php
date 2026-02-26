@@ -51,7 +51,7 @@ Route::middleware('guest')->group(function () {
 
 Route::any('/logout', [AuthController::class, 'destroy'])->name('logout');
 
-Route::middleware(['auth', config('jetstream.auth_session')])->group(function () {
+Route::middleware(['auth', config('jetstream.auth_session'), 'subscription.access'])->group(function () {
     Route::middleware('partial')->group(function () {
         // Dashboard
         Route::get('/dashboard', [WebDashboardController::class, 'dashboard'])->name('dashboard');

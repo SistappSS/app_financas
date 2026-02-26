@@ -15,7 +15,9 @@ class AsaasWebhookController extends Controller
 
     public function __invoke(Request $request)
     {
-        $tokenHeader = $request->header('asaas-access-token');
+        $tokenHeader = $request->header('asaas-access-token')
+            ?? $request->header('asaas_access_token')
+            ?? $request->header('Asaas-Access-Token');
         $expected = config('asaas.sandbox')
             ? config('asaas.webhook_token_sandbox')
             : config('asaas.webhook_token_production');
@@ -41,6 +43,7 @@ class AsaasWebhookController extends Controller
 
         if (in_array($event, ['PAYMENT_OVERDUE', 'PAYMENT_DELETED', 'PAYMENT_REFUNDED'], true)) {
             $payment->update(['status' => 'failed']);
+            $this->subscriptionService->syncUserAccess($payment->user);
         }
 
         return response()->json(['ok' => true]);

@@ -28,6 +28,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'partial' => \App\Http\Middleware\PartialRender::class,
+            'subscription.access' => \App\Http\Middleware\EnsureSubscriptionAccess::class,
             // quando criarmos: 'idempotency' => \App\Http\Middleware\Idempotency::class,
         ]);
     })
