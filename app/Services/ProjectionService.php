@@ -288,7 +288,7 @@ class ProjectionService
             ->whereIn('t.user_id', $userIds)
             ->whereBetween('pt.payment_date', [$from->toDateString(), $to->toDateString()])
             ->get([
-                'pt.id as pid','pt.amount as pamount','pt.payment_date',
+                'pt.id as pid','pt.amount as pamount','pt.payment_date','pt.created_at as payment_created_at',
                 't.id as tid','t.title','t.type','t.type_card','t.card_id',
                 'tc.name as cat','tc.type as cat_type'
             ]);
@@ -297,11 +297,23 @@ class ProjectionService
             $amt = (float)$r->pamount;
             $amt = ($r->cat_type === 'entrada') ? abs($amt) : -abs($amt);
 
+            $todayIso = now('America/Sao_Paulo')->toDateString();
+            $paymentIso = Carbon::parse($r->payment_date)->toDateString();
+            $createdIso = !empty($r->payment_created_at)
+                ? Carbon::parse($r->payment_created_at)->toDateString()
+                : $paymentIso;
+
+            // baixa já registrada hoje para título futuro não deve continuar aparecendo
+            // como entrada/saída futura pendente na projeção.
+            $effectiveIso = ($paymentIso > $todayIso && $createdIso <= $todayIso)
+                ? $createdIso
+                : $paymentIso;
+
             return [
                 'id'         => "pay_{$r->pid}",
                 'title'      => $r->title ?: ($r->cat ?: 'Pagamento'),
                 'amount'     => round($amt, 2),
-                'date'       => Carbon::parse($r->payment_date)->toDateString(),
+                'date'       => $effectiveIso,
                 'type'       => $r->type,
                 'type_card'  => $r->type_card,
                 'card_id'    => $r->card_id,
