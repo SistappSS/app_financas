@@ -33,6 +33,19 @@
         })();
     </script>
 
+    <script>
+        (function () {
+            const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+            if (!isStandalone) return;
+
+            window.addEventListener('pageshow', function (event) {
+                if (event.persisted) {
+                    window.location.reload();
+                }
+            });
+        })();
+    </script>
+
     <!-- Tailwind CDN + config -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
