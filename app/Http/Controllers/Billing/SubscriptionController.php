@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\SubscriptionPayment;
 use App\Services\Billing\AsaasService;
 use App\Services\Billing\SubscriptionService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 
 class SubscriptionController extends Controller
@@ -123,15 +124,35 @@ class SubscriptionController extends Controller
             return response()->json(['message' => $reason], 422);
         }
 
-        $subscription = $this->subscriptionService->bootstrapSubscription($user);
+        $created = DB::transaction(function () use ($user) {
+            $lockedUser = $user->newQuery()->whereKey($user->id)->lockForUpdate()->firstOrFail();
+            $subscription = $this->subscriptionService->bootstrapSubscription($lockedUser);
 
-        $openPending = SubscriptionPayment::query()
-            ->where('user_id', $user->id)
-            ->where('status', 'pending')
-            ->latest()
-            ->first();
+            $openPending = SubscriptionPayment::query()
+                ->where('user_id', $lockedUser->id)
+                ->where('status', 'pending')
+                ->latest()
+                ->lockForUpdate()
+                ->first();
 
-        if ($openPending) {
+            if ($openPending) {
+                return ['existing_pending' => $openPending, 'subscription' => $subscription, 'user' => $lockedUser];
+            }
+
+            $pending = SubscriptionPayment::create([
+                'user_id' => $lockedUser->id,
+                'subscription_id' => $subscription->id,
+                'status' => 'pending',
+                'amount' => $subscription->amount,
+                'due_date' => now()->addDays((int) config('asaas.plan.grace_days_for_pix', 2))->toDateString(),
+            ]);
+
+            return ['pending' => $pending, 'subscription' => $subscription, 'user' => $lockedUser];
+        });
+
+        if (!empty($created['existing_pending'])) {
+            $openPending = $created['existing_pending'];
+
             if ($openPending->asaas_payment_id) {
                 $this->syncPaymentFromGateway($openPending);
                 $openPending = $openPending->fresh();
@@ -143,18 +164,28 @@ class SubscriptionController extends Controller
                     'payment' => $openPending,
                 ], 409);
             }
+
+            $created = DB::transaction(function () use ($user) {
+                $lockedUser = $user->newQuery()->whereKey($user->id)->lockForUpdate()->firstOrFail();
+                $subscription = $this->subscriptionService->bootstrapSubscription($lockedUser);
+
+                $pending = SubscriptionPayment::create([
+                    'user_id' => $lockedUser->id,
+                    'subscription_id' => $subscription->id,
+                    'status' => 'pending',
+                    'amount' => $subscription->amount,
+                    'due_date' => now()->addDays((int) config('asaas.plan.grace_days_for_pix', 2))->toDateString(),
+                ]);
+
+                return ['pending' => $pending, 'subscription' => $subscription, 'user' => $lockedUser];
+            });
         }
 
-        $customerId = $this->asaasService->ensureCustomer($user);
-        $user->forceFill(['asaas_customer_id' => $customerId])->save();
+        $customerId = $this->asaasService->ensureCustomer($created['user']);
+        $created['user']->forceFill(['asaas_customer_id' => $customerId])->save();
 
-        $pending = SubscriptionPayment::create([
-            'user_id' => $user->id,
-            'subscription_id' => $subscription->id,
-            'status' => 'pending',
-            'amount' => $subscription->amount,
-            'due_date' => now()->addDays((int) config('asaas.plan.grace_days_for_pix', 2))->toDateString(),
-        ]);
+        $pending = $created['pending'];
+        $subscription = $created['subscription'];
 
         $asaas = $this->asaasService->createPixPayment($customerId, [
             'amount' => $subscription->amount,
