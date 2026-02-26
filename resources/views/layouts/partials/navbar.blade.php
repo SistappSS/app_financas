@@ -1,4 +1,4 @@
-<header class="sticky top-0 z-40 border-b border-neutral-200/70 dark:border-neutral-800/70 bg-white/70 dark:bg-neutral-950/60 backdrop-blur supports-[backdrop-filter]:bg-white/50 supports-[backdrop-filter]:dark:bg-neutral-950/50">
+<header class="sticky top-0 z-40 pt-[env(safe-area-inset-top)] md:pt-0 border-b border-neutral-200/70 dark:border-neutral-800/70 bg-white/70 dark:bg-neutral-950/60 backdrop-blur supports-[backdrop-filter]:bg-white/50 supports-[backdrop-filter]:dark:bg-neutral-950/50">
     <div class="max-w-7xl mx-auto flex items-center justify-between gap-3 px-4 py-3 md:py-4">
         <div class="flex items-center gap-3">
             <div class="hidden md:flex items-center gap-2">
