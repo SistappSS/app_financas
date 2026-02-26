@@ -13,6 +13,7 @@ use App\Models\PaymentTransaction;
 use App\Models\Recurrent;
 use App\Models\Saving;
 use App\Models\Transaction;
+use App\Services\LedgerService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -874,9 +875,9 @@ class DashboardController extends Controller
 
         $data = $request->validate([
             'amount' => ['required', 'numeric', 'min:0.01'],
-            'date' => ['required', 'date'],
+            'date' => ['required', 'date', 'after_or_equal:today'],
             'scope' => ['nullable', 'in:series,occurrence'],
-            'reference_date' => ['nullable', 'date'],
+            'reference_date' => ['nullable', 'date', 'after_or_equal:today'],
         ]);
 
         $scope = $data['scope'] ?? 'series';
@@ -991,7 +992,7 @@ class DashboardController extends Controller
 
     $data = $request->validate([
         'amount'       => ['required', 'numeric'],
-        'payment_date' => ['required', 'date'],
+        'payment_date' => ['required', 'date', 'before_or_equal:today'],
         'month'        => ['nullable', 'date_format:Y-m'], // mês selecionado na UI (para recalcular KPIs)
         'due_date'     => ['nullable', 'date'],            // NOVO: data da ocorrência/vencimento
         'account_id'   => ['nullable', 'integer'],
@@ -1025,7 +1026,7 @@ $existsSameRef = PaymentTransaction::where('transaction_id', $transaction->id)
 if ($existsSameRef) {
     return response()->json(['ok' => false, 'message' => 'Essa ocorrência já foi paga.'], 409);
 }
-    DB::transaction(function () use ($transaction, $data, $userIds, $refDate) {
+    DB::transaction(function () use ($transaction, $data, $userIds, $refDate, $ownerId) {
         // Escolha da conta
         $account = null;
 
@@ -1077,6 +1078,8 @@ if ($existsSameRef) {
                 return;
             }
 
+            $signedAmount = $type === 'entrada' ? $value : -$value;
+
             if ($type === 'entrada') {
                 // aumenta saldo
                 $account->increment('current_balance', $value);
@@ -1084,6 +1087,19 @@ if ($existsSameRef) {
                 // qualquer coisa que NÃO é entrada → trata como saída
                 $account->decrement('current_balance', $value);
             }
+
+            app(LedgerService::class)->recordAccount(
+                (string) $ownerId,
+                (string) $account->id,
+                'payment',
+                $signedAmount,
+                $paymentAt,
+                $transaction->title ?: 'Pagamento',
+                [
+                    'transaction_id' => (string) $transaction->id,
+                    'payment_transaction_id' => (string) $pt->id,
+                ]
+            );
         }
     });
 
