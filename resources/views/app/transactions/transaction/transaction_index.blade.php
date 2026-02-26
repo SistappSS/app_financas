@@ -372,6 +372,14 @@
                     <span class="text-xs text-neutral-500 dark:text-neutral-400" id="quick_label_1">Nome</span>
                     <input id="quick_name" type="text" class="mt-1 w-full rounded-xl border border-neutral-200/70 dark:border-neutral-800/70 bg-white/90 dark:bg-neutral-900/70 px-3 py-2">
                 </label>
+                <label class="block hidden" id="quick_category_type_wrap">
+                    <span class="text-xs text-neutral-500 dark:text-neutral-400">Tipo da categoria</span>
+                    <select id="quick_category_type" class="mt-1 w-full rounded-xl border border-neutral-200/70 dark:border-neutral-800/70 bg-white/90 dark:bg-neutral-900/70 px-3 py-2">
+                        <option value="entrada">Entrada</option>
+                        <option value="despesa" selected>Despesa</option>
+                        <option value="investimento">Investimento</option>
+                    </select>
+                </label>
                 <label class="block hidden" id="quick_extra_wrap">
                     <span class="text-xs text-neutral-500 dark:text-neutral-400" id="quick_label_2">Valor inicial</span>
                     <input id="quick_extra" type="text" class="mt-1 w-full rounded-xl border border-neutral-200/70 dark:border-neutral-800/70 bg-white/90 dark:bg-neutral-900/70 px-3 py-2">
@@ -486,6 +494,8 @@
                 const quickForm = quickModal?.querySelector('form');
                 const quickKind = document.getElementById('quick_kind');
                 const quickName = document.getElementById('quick_name');
+                const quickCategoryTypeWrap = document.getElementById('quick_category_type_wrap');
+                const quickCategoryType = document.getElementById('quick_category_type');
                 const quickExtraWrap = document.getElementById('quick_extra_wrap');
                 const quickExtra = document.getElementById('quick_extra');
                 const quickCardFields = document.getElementById('quick_card_fields');
@@ -498,6 +508,7 @@
                     quickErr.textContent = '';
                     quickName.value = '';
                     if (quickExtra) quickExtra.value = '';
+                    quickCategoryTypeWrap?.classList.toggle('hidden', kind !== 'category');
                     quickExtraWrap?.classList.toggle('hidden', kind !== 'account');
                     quickCardFields?.classList.toggle('hidden', kind !== 'card');
                     quickModal.classList.remove('hidden');
@@ -510,7 +521,7 @@
                     if (kind === 'category') {
                         const fd = new FormData();
                         fd.append('name', quickName.value.trim());
-                        fd.append('type', 'despesa');
+                        fd.append('type', quickCategoryType?.value || 'despesa');
                         fd.append('has_limit', '0');
                         const r = await fetch("{{ route('transaction-categories.store') }}", {method:'POST', headers:{'X-CSRF-TOKEN': CSRF, Accept:'application/json'}, body: fd});
                         if (!r.ok) throw new Error('Falha ao criar categoria.');

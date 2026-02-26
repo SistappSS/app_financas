@@ -353,8 +353,8 @@
     <div id="adjust_scope_wrap" class="mt-3 hidden rounded-xl border border-neutral-200/70 dark:border-neutral-800/70 p-3">
         <p class="text-xs text-neutral-500 dark:text-neutral-400 mb-2">Transação recorrente</p>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-            <label class="inline-flex items-center gap-2"><input type="radio" name="scope" value="occurrence" id="adj_scope_occ"><span>Somente esse mês</span></label>
-            <label class="inline-flex items-center gap-2"><input type="radio" name="scope" value="series" id="adj_scope_series" checked><span>Alterar recorrência para essa data</span></label>
+            <label class="inline-flex items-center gap-2"><input type="radio" name="scope" value="occurrence" id="adj_scope_occ"><span>Somente essa transação</span></label>
+            <label class="inline-flex items-center gap-2"><input type="radio" name="scope" value="series" id="adj_scope_series" checked><span>Todas as futuras transações</span></label>
         </div>
         <input type="hidden" name="reference_date" id="adjust_reference_date">
     </div>
@@ -803,7 +803,7 @@ if (dueHidden)  dueHidden.value = CURRENT_DUE_DATE; // aqui ele passa 29/12/2025
                     let key = ev.id ?? `${ev.title}-${ev.start}`;
 
                     const tipo = (xp.type || '').toLowerCase().trim();
-                    const isTxLaunch = (tipo === 'entrada' || tipo === 'despesa') && xp.transaction_id;
+                    const isTxLaunch = (tipo === 'entrada' || tipo === 'despesa' || tipo === 'investimento') && xp.transaction_id;
                     if (isTxLaunch) key = `tx_${xp.transaction_id}_${day}`;
 
                     const item = {
@@ -817,14 +817,30 @@ if (dueHidden)  dueHidden.value = CURRENT_DUE_DATE; // aqui ele passa 29/12/2025
                         current_month: xp.current_month || null,
                         invoice_id: xp.invoice_id || null,
                         tx_id: xp.transaction_id || null,
+                        recurrence_type: xp.recurrence_type || (String(ev.id || '').startsWith('rec_') ? 'monthly' : 'unique'),
                     };
                     const map = eventosCache[day] ?? (eventosCache[day] = new Map());
                     if (!map.has(key)) map.set(key, item);
                 }
 
+                function clearWindowCache(ymStr, months = 2) {
+                    const [y,m] = ymStr.split('-').map(Number);
+                    if (!y || !m) return;
+                    const start = new Date(y, m - 1, 1);
+                    const end = new Date(y, m - 1 + months, 0);
+                    Object.keys(eventosCache).forEach(day => {
+                        const [dy, dm, dd] = day.split('-').map(Number);
+                        const d = new Date(dy, dm - 1, dd);
+                        if (d >= start && d <= end) delete eventosCache[day];
+                    });
+                }
+
                 async function loadWindow(ymStr, months = 2, force = false) {
                     const key = `${ymStr}:${months}`;
-                    if (force) loadedWindows.delete(key);
+                    if (force) {
+                        loadedWindows.delete(key);
+                        clearWindowCache(ymStr, months);
+                    }
                     if (loadedWindows.has(key)) return;
                     const resp = await fetch(`${routeUrl}?start=${ymStr}&months=${months}`, {headers: {'Accept': 'application/json'}});
                     if (!resp.ok) return;
