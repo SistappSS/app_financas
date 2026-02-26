@@ -921,10 +921,34 @@ class DashboardController extends Controller
             ]);
         }
 
+        $newDate = Carbon::parse($data['date'])->toDateString();
+        $newAmount = (float) $data['amount'];
+
         $transaction->update([
-            'amount' => (float) $data['amount'],
-            'date' => Carbon::parse($data['date'])->toDateString(),
+            'amount' => $newAmount,
+            'date' => $newDate,
         ]);
+
+        if (in_array($transaction->recurrence_type, ['monthly', 'yearly', 'custom'], true)) {
+            $recurrent = Recurrent::where('transaction_id', $transaction->id)->first();
+
+            if ($recurrent) {
+                $recurrentPayload = [
+                    'amount' => $newAmount,
+                ];
+
+                if (in_array($transaction->recurrence_type, ['monthly', 'yearly'], true)) {
+                    $recurrentPayload['payment_day'] = (string) Carbon::parse($newDate)->day;
+                }
+
+                if ($transaction->recurrence_type === 'custom') {
+                    $recurrentPayload['start_date'] = $newDate;
+                    $recurrentPayload['next_run_date'] = $newDate;
+                }
+
+                $recurrent->update($recurrentPayload);
+            }
+        }
 
         return response()->json([
             'ok' => true,

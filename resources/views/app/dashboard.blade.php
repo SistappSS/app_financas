@@ -350,14 +350,6 @@
                    required>
         </label>
     </div>
-    <div id="adjust_scope_wrap" class="mt-3 hidden rounded-xl border border-neutral-200/70 dark:border-neutral-800/70 p-3">
-        <p class="text-xs text-neutral-500 dark:text-neutral-400 mb-2">Transação recorrente</p>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-            <label class="inline-flex items-center gap-2"><input type="radio" name="scope" value="occurrence" id="adj_scope_occ"><span>Somente essa transação</span></label>
-            <label class="inline-flex items-center gap-2"><input type="radio" name="scope" value="series" id="adj_scope_series" checked><span>Todas as futuras transações</span></label>
-        </div>
-        <input type="hidden" name="reference_date" id="adjust_reference_date">
-    </div>
 </x-modal>
 
 <x-modal id="adjustModal" titleCreate="Ajustar transação" titleEdit="Ajustar transação" titleShow="Ajustar transação" submitLabel="Salvar ajuste">
@@ -377,6 +369,15 @@
                    class="mt-1 w-full rounded-xl border border-neutral-200/70 dark:border-neutral-800/70 bg-white/90 dark:bg-neutral-900/70 px-3 py-2"
                    required>
         </label>
+    </div>
+
+    <div id="adjust_scope_wrap" class="mt-3 hidden rounded-xl border border-neutral-200/70 dark:border-neutral-800/70 p-3">
+        <p class="text-xs text-neutral-500 dark:text-neutral-400 mb-2">Transação recorrente</p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <label class="inline-flex items-center gap-2"><input type="radio" name="scope" value="occurrence" id="adj_scope_occ"><span>Somente essa transação</span></label>
+            <label class="inline-flex items-center gap-2"><input type="radio" name="scope" value="series" id="adj_scope_series" checked><span>Todas as futuras transações</span></label>
+        </div>
+        <input type="hidden" name="reference_date" id="adjust_reference_date">
     </div>
 </x-modal>
 
