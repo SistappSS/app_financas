@@ -133,9 +133,9 @@
                 @php
                     $groupedCategories = $categories->groupBy('type');
                     $typeLabels = [
-                        1 => 'Receitas',
-                        2 => 'Despesas',
-                        3 => 'Transferências',
+                        'entrada' => 'Entradas',
+                        'despesa' => 'Despesas',
+                        'investimento' => 'Investimentos',
                     ];
                 @endphp
 
@@ -166,7 +166,7 @@
            data-[leave]:[transition-behavior:allow-discrete] sm:text-sm">
 
                         @foreach($groupedCategories as $type => $cats)
-                            <div class="px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide
+                            <div data-group-title="{{ strtolower((string)$type) }}" class="px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide
                     text-slate-400 dark:text-slate-400">
                                 {{ $typeLabels[$type] ?? 'Outros' }}
                             </div>
@@ -378,7 +378,17 @@
                 </label>
                 <div id="quick_card_fields" class="hidden grid grid-cols-2 gap-3">
                     <label><span class="text-xs text-neutral-500 dark:text-neutral-400">Final</span><input id="quick_card_last4" maxlength="4" class="mt-1 w-full rounded-xl border border-neutral-200/70 dark:border-neutral-800/70 bg-white/90 dark:bg-neutral-900/70 px-3 py-2"></label>
-                    <label><span class="text-xs text-neutral-500 dark:text-neutral-400">Bandeira</span><input id="quick_card_brand" value="Master" class="mt-1 w-full rounded-xl border border-neutral-200/70 dark:border-neutral-800/70 bg-white/90 dark:bg-neutral-900/70 px-3 py-2"></label>
+                    <label><span class="text-xs text-neutral-500 dark:text-neutral-400">Bandeira</span>
+                        <select id="quick_card_brand" class="mt-1 w-full rounded-xl border border-neutral-200/70 dark:border-neutral-800/70 bg-white/90 dark:bg-neutral-900/70 px-3 py-2">
+                            <option value="1">Visa</option>
+                            <option value="2" selected>Mastercard</option>
+                            <option value="3">American Express</option>
+                            <option value="4">Discover</option>
+                            <option value="5">Diners Club</option>
+                            <option value="6">JCB</option>
+                            <option value="7">Elo</option>
+                        </select>
+                    </label>
                     <label><span class="text-xs text-neutral-500 dark:text-neutral-400">Fechamento</span><input id="quick_card_close" type="number" min="1" max="31" value="10" class="mt-1 w-full rounded-xl border border-neutral-200/70 dark:border-neutral-800/70 bg-white/90 dark:bg-neutral-900/70 px-3 py-2"></label>
                     <label><span class="text-xs text-neutral-500 dark:text-neutral-400">Vencimento</span><input id="quick_card_due" type="number" min="1" max="31" value="20" class="mt-1 w-full rounded-xl border border-neutral-200/70 dark:border-neutral-800/70 bg-white/90 dark:bg-neutral-900/70 px-3 py-2"></label>
                 </div>
@@ -508,11 +518,28 @@
                         const id = cat.id || cat.uuid;
                         const name = cat.name || quickName.value.trim();
                         const select = document.getElementById('transaction_category_id');
-                        if (select && id) {
+                        const optionsWrap = select?.querySelector('el-options');
+                        if (select && optionsWrap && id) {
+                            const typeNorm = normType(cat.type || 'despesa');
+                            const typeTitle = ({entrada:'Entradas', despesa:'Despesas', investimento:'Investimentos'})[typeNorm] || 'Outros';
+
+                            let groupTitle = Array.from(optionsWrap.querySelectorAll('[data-group-title]'))
+                                .find(el => (el.dataset.groupTitle || '') === typeNorm);
+
+                            if (!groupTitle) {
+                                groupTitle = document.createElement('div');
+                                groupTitle.dataset.groupTitle = typeNorm;
+                                groupTitle.className = 'px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-400';
+                                groupTitle.textContent = typeTitle;
+                                optionsWrap.appendChild(groupTitle);
+                            }
+
                             const opt = document.createElement('el-option');
                             opt.setAttribute('value', id);
+                            opt.className = 'group/option relative cursor-default select-none py-2 pl-3 pr-9 text-gray-900 dark:text-neutral-50 focus:bg-blue-600 dark:focus:bg-blue-500/30 focus:text-white dark:focus:text-blue-100 focus:outline-none [&:not([hidden])]:block';
                             opt.innerHTML = `<div class="flex items-center"><i class="${cat.icon || 'fa-solid fa-tags'} fs-5 text-slate-500"></i><span class="ml-3 block truncate font-normal">${name}</span></div>`;
-                            select.appendChild(opt);
+                            optionsWrap.appendChild(opt);
+
                             select.value = id;
                         }
                         ALL_CATS.push({id, name, type: normType(cat.type || 'despesa')});
@@ -545,7 +572,7 @@
                         fd.append('account_id', accountId);
                         fd.append('cardholder_name', quickName.value.trim());
                         fd.append('last_four_digits', (document.getElementById('quick_card_last4')?.value || '0000'));
-                        fd.append('brand', (document.getElementById('quick_card_brand')?.value || 'Master'));
+                        fd.append('brand', (document.getElementById('quick_card_brand')?.value || '2'));
                         fd.append('color_card', '#3b82f6');
                         fd.append('credit_limit', '0');
                         fd.append('closing_day', document.getElementById('quick_card_close')?.value || '10');
