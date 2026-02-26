@@ -104,11 +104,29 @@ class ProjectionService
                 $occ   = $buildOcc($globalFrom, $to);
                 $bills = $buildBills($globalFrom, $to);
 
-                // sem livro-razão ainda: usa saldo real atual das contas (+ cofrinhos selecionados)
-                // para não iniciar projeção em zero quando já existe valor em conta.
-                $globalOpening = $effectiveCurrent ?? $savingsBalance;
+                // Se a janela contém hoje e já temos saldo real atual,
+                // ajusta a abertura para NÃO duplicar pagamentos já refletidos
+                // no current_balance (ex.: baixa antecipada de ocorrência futura).
+                if ($rangeHasToday && $effectiveCurrent !== null) {
+                    $daysZero = $this->consolidateDays($globalFrom, $to, 0.0, $occ, $bills);
 
-                $daysAll = $this->consolidateDays($globalFrom, $to, $globalOpening, $occ, $bills);
+                    $netUntilToday = 0.0;
+                    foreach ($daysZero as $d) {
+                        if ($d['date'] > $todayIso) {
+                            break;
+                        }
+                        $netUntilToday += (float) $d['net'];
+                    }
+
+                    $globalOpening = (float) $effectiveCurrent - $netUntilToday;
+                    $daysAll = $this->consolidateDays($globalFrom, $to, $globalOpening, $occ, $bills);
+                    $alignToCurrent = true;
+                } else {
+                    // sem livro-razão ainda: usa saldo real atual das contas (+ cofrinhos selecionados)
+                    // para não iniciar projeção em zero quando já existe valor em conta.
+                    $globalOpening = $effectiveCurrent ?? $savingsBalance;
+                    $daysAll = $this->consolidateDays($globalFrom, $to, $globalOpening, $occ, $bills);
+                }
 
             } else {
                 // 2.2) Já existe histórico real em conta
