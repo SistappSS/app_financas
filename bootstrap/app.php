@@ -24,6 +24,8 @@ return Application::configure(basePath: dirname(__DIR__))
                 Request::HEADER_X_FORWARDED_AWS_ELB
         );
 
+        $middleware->validateCsrfTokens(except: ['webhooks/asaas']);
+
         $middleware->alias([
             'partial' => \App\Http\Middleware\PartialRender::class,
             // quando criarmos: 'idempotency' => \App\Http\Middleware\Idempotency::class,

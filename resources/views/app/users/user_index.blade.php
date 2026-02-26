@@ -125,6 +125,50 @@
         </div>
     </section>
 
+
+    <section class="mt-4">
+        <div class="rounded-2xl border border-neutral-200/70 dark:border-neutral-800/70 bg-white dark:bg-neutral-900 p-4">
+            <div class="flex items-start justify-between gap-3">
+                <div>
+                    <h4 class="text-sm font-semibold">Assinatura</h4>
+                    <p class="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+                        Plano {{ $subscription->plan_name }} — R$ {{ number_format($subscription->amount, 2, ',', '.') }}/mês
+                    </p>
+                </div>
+                <span class="px-2 py-1 rounded-full text-[11px] {{ $subscriptionHasAccess ? 'badge-active' : 'badge-inactive' }}">
+                    {{ $subscriptionHasAccess ? 'Acesso completo' : 'Acesso limitado' }}
+                </span>
+            </div>
+
+            <div class="mt-3 text-xs">
+                @if($subscriptionIsTrial)
+                    <p>Período grátis até <strong>{{ optional($subscription->trial_ends_at)->format('d/m/Y H:i') }}</strong>.</p>
+                @elseif($subscription->current_period_ends_at)
+                    <p>Assinatura válida até <strong>{{ $subscription->current_period_ends_at->format('d/m/Y H:i') }}</strong>.</p>
+                @else
+                    <p>Seu período grátis encerrou. Gere um PIX para renovar seu acesso.</p>
+                @endif
+            </div>
+
+            <div class="mt-3 flex flex-wrap items-center gap-2">
+                <button type="button" id="btnCheckoutPix" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-emerald-600 text-white hover:bg-emerald-700">
+                    <i class="fa-solid fa-qrcode"></i>
+                    Adquirir assinatura
+                </button>
+                <a href="#" id="subscriptionInvoiceLink" target="_blank" class="hidden text-xs underline text-brand-600">Abrir fatura</a>
+            </div>
+
+            <div id="pixResult" class="hidden mt-3 rounded-xl border border-neutral-200/70 dark:border-neutral-700 p-3">
+                <p class="text-xs mb-2">PIX copia e cola:</p>
+                <textarea id="pixCopyPaste" readonly class="w-full rounded-lg border border-neutral-200 dark:border-neutral-700 bg-transparent p-2 text-[11px]" rows="3"></textarea>
+                <div class="mt-2 flex items-center gap-2">
+                    <button type="button" id="btnCopyPix" class="px-3 py-1 rounded-lg text-xs border border-neutral-200 dark:border-neutral-700">Copiar código</button>
+                    <img id="pixQrImage" class="h-24 w-24 rounded-lg border border-neutral-200 dark:border-neutral-700" alt="QR Code PIX" />
+                </div>
+            </div>
+        </div>
+    </section>
+
     <section class="mt-4">
         <div
             class="rounded-2xl border border-neutral-200/70 dark:border-neutral-800/70 bg-white dark:bg-neutral-900 p-4">
@@ -140,6 +184,28 @@
             aria-label="Adicionar usuário">
         <i class="fa fa-plus"></i>
     </button>
+
+
+    <div id="modalSubscriptionDocument" class="fixed inset-0 z-[90] hidden">
+        <div class="absolute inset-0 bg-black/50" data-doc-overlay></div>
+        <div class="relative mx-auto mt-24 w-[92%] max-w-md rounded-2xl border border-neutral-200/70 dark:border-neutral-800/70 bg-white dark:bg-neutral-900 p-4 shadow-xl">
+            <div class="flex items-center justify-between">
+                <h5 class="text-sm font-semibold">Informe CPF/CNPJ para assinatura</h5>
+                <button type="button" data-doc-close class="size-8 rounded-lg border border-neutral-200/70 dark:border-neutral-700">×</button>
+            </div>
+            <p class="text-xs text-neutral-500 dark:text-neutral-400 mt-2">Precisamos desse dado para gerar a cobrança PIX no Asaas.</p>
+            <form id="subscriptionDocumentForm" class="mt-3 space-y-3">
+                <label class="block text-sm">
+                    <span class="text-xs font-medium text-neutral-600 dark:text-neutral-300">CPF / CNPJ</span>
+                    <input type="text" id="subscriptionDocumentInput" name="cpf_cnpj" required placeholder="000.000.000-00" class="mt-1 w-full rounded-xl border border-neutral-200/70 dark:border-neutral-800/70 bg-white/90 dark:bg-neutral-900/70 px-3 py-2 text-sm">
+                </label>
+                <div class="flex items-center justify-end gap-2">
+                    <button type="button" data-doc-close class="px-3 py-1.5 rounded-lg text-xs border border-neutral-200 dark:border-neutral-700">Cancelar</button>
+                    <button type="submit" class="px-3 py-1.5 rounded-lg text-xs bg-brand-600 text-white">Salvar e continuar</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <x-modal
         id="modalUser"
@@ -175,8 +241,18 @@
                 const loggedUserName     = @json(auth()->user()->name);
                 const loggedUserEmail    = @json(auth()->user()->email);
                 const loggedUserIsActive = {{ auth()->user()->is_active ? '1' : '0' }};
+                let loggedUserCpfCnpj  = @json(auth()->user()->cpf_cnpj);
 
                 const usersCache = {}; // id => user
+                const btnCheckoutPix = document.getElementById('btnCheckoutPix');
+                const pixResult = document.getElementById('pixResult');
+                const pixCopyPaste = document.getElementById('pixCopyPaste');
+                const pixQrImage = document.getElementById('pixQrImage');
+                const btnCopyPix = document.getElementById('btnCopyPix');
+                const subscriptionInvoiceLink = document.getElementById('subscriptionInvoiceLink');
+                const modalSubscriptionDocument = document.getElementById('modalSubscriptionDocument');
+                const subscriptionDocumentForm = document.getElementById('subscriptionDocumentForm');
+                const subscriptionDocumentInput = document.getElementById('subscriptionDocumentInput');
 
                 if (!modal || !formEl || !list) {
                     console.warn('Modal, formUser ou userList não encontrados.');
@@ -279,6 +355,7 @@
                     const isActiveInput   = formEl.querySelector('[name="is_active"]');
                     const passwordInput   = formEl.querySelector('[name="password"]');
                     const passwordConfInp = formEl.querySelector('[name="password_confirmation"]');
+                    const cpfCnpjInput  = formEl.querySelector('[name="cpf_cnpj"]');
 
                     if (nameInput)  nameInput.value  = user.name  || '';
                     if (emailInput) emailInput.value = user.email || '';
@@ -287,6 +364,7 @@
                     }
                     if (passwordInput)   passwordInput.value   = '';
                     if (passwordConfInp) passwordConfInp.value = '';
+                    if (cpfCnpjInput) cpfCnpjInput.value = user.cpf_cnpj || '';
                 }
 
                 const openModal = () => {
@@ -320,6 +398,7 @@
                         name:      loggedUserName,
                         email:     loggedUserEmail,
                         is_active: loggedUserIsActive === '1',
+                        cpf_cnpj: loggedUserCpfCnpj || '',
                     };
                     setModeEdit(user);
                     openModal();
@@ -429,6 +508,7 @@
                     if (row.id === loggedUserId) {
                         if (profileName)  profileName.textContent  = row.name;
                         if (profileEmail) profileEmail.textContent = row.email;
+                        loggedUserCpfCnpj = row.cpf_cnpj || null;
 
                         const imgSrc = row.image ? `data:image/jpeg;base64,${row.image}` : assetUrl;
                         if (avatarImg) avatarImg.src = imgSrc;
@@ -449,6 +529,92 @@
                         console.error(err);
                     }
                 }
+
+
+
+                const closeDocumentModal = () => {
+                    modalSubscriptionDocument?.classList.add('hidden');
+                    document.body.classList.remove('overflow-hidden');
+                };
+
+                const openDocumentModal = () => {
+                    modalSubscriptionDocument?.classList.remove('hidden');
+                    document.body.classList.add('overflow-hidden');
+                    if (subscriptionDocumentInput) subscriptionDocumentInput.value = loggedUserCpfCnpj || '';
+                };
+
+                modalSubscriptionDocument?.addEventListener('click', (e) => {
+                    if (e.target.matches('[data-doc-overlay]') || e.target.closest('[data-doc-close]')) {
+                        closeDocumentModal();
+                    }
+                });
+
+                async function createPixCheckout() {
+                    const resp = await fetch("{{ route('billing.subscription.checkout-pix') }}", {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                            'Accept': 'application/json'
+                        }
+                    });
+
+                    const payload = await resp.json();
+
+                    if (!resp.ok) throw new Error(payload.message || 'Erro ao gerar PIX');
+
+                    pixResult?.classList.remove('hidden');
+                    if (pixCopyPaste) pixCopyPaste.value = payload.pix_copy_paste || '';
+                    if (pixQrImage && payload.pix_qr_code) pixQrImage.src = `data:image/png;base64,${payload.pix_qr_code}`;
+
+                    if (subscriptionInvoiceLink && payload.invoice_url) {
+                        subscriptionInvoiceLink.classList.remove('hidden');
+                        subscriptionInvoiceLink.href = payload.invoice_url;
+                    }
+                }
+
+                subscriptionDocumentForm?.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+
+                    try {
+                        const resp = await fetch("{{ route('billing.subscription.document') }}", {
+                            method: 'POST',
+                            headers: {
+                                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                                'Accept': 'application/json',
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ cpf_cnpj: subscriptionDocumentInput?.value || '' })
+                        });
+
+                        const payload = await resp.json();
+
+                        if (!resp.ok) throw new Error(payload.message || 'Erro ao salvar CPF/CNPJ');
+
+                        loggedUserCpfCnpj = payload.cpf_cnpj;
+                        closeDocumentModal();
+                        await createPixCheckout();
+                    } catch (err) {
+                        alert(err.message || 'Falha ao salvar documento');
+                    }
+                });
+
+                btnCheckoutPix?.addEventListener('click', async () => {
+                    try {
+                        if (!loggedUserCpfCnpj) {
+                            openDocumentModal();
+                            return;
+                        }
+
+                        await createPixCheckout();
+                    } catch (err) {
+                        alert(err.message || 'Falha no checkout');
+                    }
+                });
+
+                btnCopyPix?.addEventListener('click', async () => {
+                    if (!pixCopyPaste?.value) return;
+                    await navigator.clipboard.writeText(pixCopyPaste.value);
+                });
 
                 // clicar no botão editar do card
                 list.addEventListener('click', (e) => {
