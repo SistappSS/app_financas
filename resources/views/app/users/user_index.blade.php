@@ -125,6 +125,57 @@
         </div>
     </section>
 
+
+    <section class="mt-4">
+        <div class="rounded-2xl border border-neutral-200/70 dark:border-neutral-800/70 bg-white dark:bg-neutral-900 p-4">
+            <div class="flex items-start justify-between gap-3">
+                <div>
+                    <h4 class="text-sm font-semibold">Assinatura</h4>
+                    <p class="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+                        Plano {{ $subscription->plan_name }} — R$ {{ number_format($subscription->amount, 2, ',', '.') }}/mês
+                    </p>
+                </div>
+                <span id="subscriptionAccessBadge" class="px-2 py-1 rounded-full text-[11px] {{ $subscriptionHasAccess ? 'badge-active' : 'badge-inactive' }}">
+                    {{ $subscriptionHasAccess ? 'Acesso completo' : 'Acesso limitado' }}
+                </span>
+            </div>
+
+            <div class="mt-3 text-xs" id="subscriptionStatusText">
+                @if($subscriptionIsSubscriber && $subscriptionSubscriberUntil)
+                    <p>Assinante até <strong>{{ $subscriptionSubscriberUntil->format('d/m/Y H:i') }}</strong>.</p>
+                @elseif($subscriptionIsTrial)
+                    <p>Período grátis até <strong>{{ optional($subscriptionTrialEndsAt)->format('d/m/Y H:i') }}</strong>.</p>
+                @elseif($subscriptionGraceUntil)
+                    <p>Seu plano venceu. Renove até <strong>{{ $subscriptionGraceUntil->format('d/m/Y H:i') }}</strong> para não perder acesso.</p>
+                @else
+                    <p>Seu período grátis encerrou. Gere um PIX para renovar seu acesso.</p>
+                @endif
+            </div>
+
+            <div id="subscriptionRenewAlert" class="{{ $subscriptionIsRenewalAlert ? '' : 'hidden' }} mt-2 text-[11px] px-2 py-1 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                Renove seu plano para não perder acesso...
+            </div>
+
+            <div id="subscriptionCheckoutActions" class="mt-3 flex flex-wrap items-center gap-2">
+                <button type="button" id="btnCheckoutPix" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-emerald-600 text-white hover:bg-emerald-700">
+                    <i class="fa-solid fa-qrcode"></i>
+                    Adquirir assinatura
+                </button>
+                <a href="#" id="subscriptionInvoiceLink" target="_blank" class="hidden text-xs underline text-brand-600">Abrir fatura</a>
+            </div>
+            <p id="subscriptionCheckoutHint" class="hidden mt-2 text-[11px] text-neutral-500 dark:text-neutral-400"></p>
+
+            <div id="pixResult" class="hidden mt-3 rounded-xl border border-neutral-200/70 dark:border-neutral-700 p-3">
+                <p class="text-xs mb-2">PIX copia e cola:</p>
+                <textarea id="pixCopyPaste" readonly class="w-full rounded-lg border border-neutral-200 dark:border-neutral-700 bg-transparent p-2 text-[11px]" rows="3"></textarea>
+                <div class="mt-2 flex items-center gap-2">
+                    <button type="button" id="btnCopyPix" class="px-3 py-1 rounded-lg text-xs border border-neutral-200 dark:border-neutral-700">Copiar código</button>
+                    <img id="pixQrImage" class="h-24 w-24 rounded-lg border border-neutral-200 dark:border-neutral-700" alt="QR Code PIX" />
+                </div>
+            </div>
+        </div>
+    </section>
+
     <section class="mt-4">
         <div
             class="rounded-2xl border border-neutral-200/70 dark:border-neutral-800/70 bg-white dark:bg-neutral-900 p-4">
@@ -140,6 +191,28 @@
             aria-label="Adicionar usuário">
         <i class="fa fa-plus"></i>
     </button>
+
+
+    <div id="modalSubscriptionDocument" class="fixed inset-0 z-[90] hidden">
+        <div class="absolute inset-0 bg-black/50" data-doc-overlay></div>
+        <div class="relative mx-auto mt-24 w-[92%] max-w-md rounded-2xl border border-neutral-200/70 dark:border-neutral-800/70 bg-white dark:bg-neutral-900 p-4 shadow-xl">
+            <div class="flex items-center justify-between">
+                <h5 class="text-sm font-semibold">Informe CPF/CNPJ para assinatura</h5>
+                <button type="button" data-doc-close class="size-8 rounded-lg border border-neutral-200/70 dark:border-neutral-700">×</button>
+            </div>
+            <p class="text-xs text-neutral-500 dark:text-neutral-400 mt-2">Precisamos desse dado para gerar a cobrança PIX no Asaas.</p>
+            <form id="subscriptionDocumentForm" class="mt-3 space-y-3">
+                <label class="block text-sm">
+                    <span class="text-xs font-medium text-neutral-600 dark:text-neutral-300">CPF / CNPJ</span>
+                    <input type="text" id="subscriptionDocumentInput" name="cpf_cnpj" required placeholder="000.000.000-00" class="mt-1 w-full rounded-xl border border-neutral-200/70 dark:border-neutral-800/70 bg-white/90 dark:bg-neutral-900/70 px-3 py-2 text-sm">
+                </label>
+                <div class="flex items-center justify-end gap-2">
+                    <button type="button" data-doc-close class="px-3 py-1.5 rounded-lg text-xs border border-neutral-200 dark:border-neutral-700">Cancelar</button>
+                    <button type="submit" class="px-3 py-1.5 rounded-lg text-xs bg-brand-600 text-white">Salvar e continuar</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <x-modal
         id="modalUser"
@@ -175,8 +248,23 @@
                 const loggedUserName     = @json(auth()->user()->name);
                 const loggedUserEmail    = @json(auth()->user()->email);
                 const loggedUserIsActive = {{ auth()->user()->is_active ? '1' : '0' }};
+                let loggedUserCpfCnpj  = @json(auth()->user()->cpf_cnpj);
 
                 const usersCache = {}; // id => user
+                const btnCheckoutPix = document.getElementById('btnCheckoutPix');
+                const pixResult = document.getElementById('pixResult');
+                const pixCopyPaste = document.getElementById('pixCopyPaste');
+                const pixQrImage = document.getElementById('pixQrImage');
+                const btnCopyPix = document.getElementById('btnCopyPix');
+                const subscriptionInvoiceLink = document.getElementById('subscriptionInvoiceLink');
+                const subscriptionCheckoutActions = document.getElementById('subscriptionCheckoutActions');
+                const subscriptionCheckoutHint = document.getElementById('subscriptionCheckoutHint');
+                const modalSubscriptionDocument = document.getElementById('modalSubscriptionDocument');
+                const subscriptionDocumentForm = document.getElementById('subscriptionDocumentForm');
+                const subscriptionDocumentInput = document.getElementById('subscriptionDocumentInput');
+                const subscriptionStatusText = document.getElementById('subscriptionStatusText');
+                const subscriptionAccessBadge = document.getElementById('subscriptionAccessBadge');
+                const subscriptionRenewAlert = document.getElementById('subscriptionRenewAlert');
 
                 if (!modal || !formEl || !list) {
                     console.warn('Modal, formUser ou userList não encontrados.');
@@ -279,6 +367,7 @@
                     const isActiveInput   = formEl.querySelector('[name="is_active"]');
                     const passwordInput   = formEl.querySelector('[name="password"]');
                     const passwordConfInp = formEl.querySelector('[name="password_confirmation"]');
+                    const cpfCnpjInput  = formEl.querySelector('[name="cpf_cnpj"]');
 
                     if (nameInput)  nameInput.value  = user.name  || '';
                     if (emailInput) emailInput.value = user.email || '';
@@ -287,6 +376,7 @@
                     }
                     if (passwordInput)   passwordInput.value   = '';
                     if (passwordConfInp) passwordConfInp.value = '';
+                    if (cpfCnpjInput) cpfCnpjInput.value = user.cpf_cnpj || '';
                 }
 
                 const openModal = () => {
@@ -320,6 +410,7 @@
                         name:      loggedUserName,
                         email:     loggedUserEmail,
                         is_active: loggedUserIsActive === '1',
+                        cpf_cnpj: loggedUserCpfCnpj || '',
                     };
                     setModeEdit(user);
                     openModal();
@@ -429,6 +520,7 @@
                     if (row.id === loggedUserId) {
                         if (profileName)  profileName.textContent  = row.name;
                         if (profileEmail) profileEmail.textContent = row.email;
+                        loggedUserCpfCnpj = row.cpf_cnpj || null;
 
                         const imgSrc = row.image ? `data:image/jpeg;base64,${row.image}` : assetUrl;
                         if (avatarImg) avatarImg.src = imgSrc;
@@ -445,10 +537,203 @@
                         const rows = await resp.json();
                         list.innerHTML = '';
                         rows.forEach(storeRow);
+                        await refreshSubscriptionSummary();
                     } catch (err) {
                         console.error(err);
                     }
                 }
+
+
+
+
+                function formatDateTime(value) {
+                    if (!value) return '';
+                    return new Date(value).toLocaleString('pt-BR', {
+                        day: '2-digit', month: '2-digit', year: 'numeric',
+                        hour: '2-digit', minute: '2-digit'
+                    });
+                }
+
+                function renderSubscriptionSummary(summary) {
+                    loggedUserCpfCnpj = summary.cpf_cnpj || loggedUserCpfCnpj;
+
+                    if (subscriptionAccessBadge) {
+                        const hasAccess = !!summary.has_access;
+                        subscriptionAccessBadge.textContent = hasAccess ? 'Acesso completo' : 'Acesso limitado';
+                        subscriptionAccessBadge.classList.toggle('badge-active', hasAccess);
+                        subscriptionAccessBadge.classList.toggle('badge-inactive', !hasAccess);
+                    }
+
+                    if (subscriptionStatusText) {
+                        if (summary.is_subscriber && summary.subscriber_until) {
+                            subscriptionStatusText.innerHTML = `<p>Assinante até <strong>${formatDateTime(summary.subscriber_until)}</strong>.</p>`;
+                        } else if (summary.is_trial && summary.trial_ends_at) {
+                            subscriptionStatusText.innerHTML = `<p>Período grátis até <strong>${formatDateTime(summary.trial_ends_at)}</strong>.</p>`;
+                        } else if (summary.grace_until) {
+                            subscriptionStatusText.innerHTML = `<p>Seu plano venceu. Renove até <strong>${formatDateTime(summary.grace_until)}</strong> para não perder acesso.</p>`;
+                        } else {
+                            subscriptionStatusText.innerHTML = '<p>Seu período grátis encerrou. Gere um PIX para renovar seu acesso.</p>';
+                        }
+                    }
+
+                    subscriptionRenewAlert?.classList.toggle('hidden', !summary.is_renewal_alert);
+
+                    const canCheckout = !!summary.can_checkout;
+                    const hasPending = !!summary.pending_payment;
+
+                    if (btnCheckoutPix) {
+                        btnCheckoutPix.classList.toggle('hidden', !canCheckout && !hasPending);
+                    }
+
+                    if (subscriptionCheckoutActions) {
+                        subscriptionCheckoutActions.classList.toggle('hidden', !canCheckout && !hasPending);
+                    }
+
+                    if (subscriptionCheckoutHint) {
+                        const msg = summary.checkout_block_reason || '';
+                        subscriptionCheckoutHint.textContent = msg;
+                        subscriptionCheckoutHint.classList.toggle('hidden', !msg || hasPending);
+                    }
+
+                    const pendingPayment = summary.pending_payment;
+
+                    if (pendingPayment?.pix_copy_paste && pendingPayment?.pix_qr_code) {
+                        pixResult?.classList.remove('hidden');
+                        if (pixCopyPaste) pixCopyPaste.value = pendingPayment.pix_copy_paste;
+                        if (pixQrImage) pixQrImage.src = `data:image/png;base64,${pendingPayment.pix_qr_code}`;
+
+                        if (subscriptionInvoiceLink && pendingPayment.invoice_url) {
+                            subscriptionInvoiceLink.classList.remove('hidden');
+                            subscriptionInvoiceLink.href = pendingPayment.invoice_url;
+                        }
+                    } else {
+                        pixResult?.classList.add('hidden');
+                        if (pixCopyPaste) pixCopyPaste.value = '';
+                        if (pixQrImage) pixQrImage.removeAttribute('src');
+                        subscriptionInvoiceLink?.classList.add('hidden');
+                    }
+                }
+
+                async function refreshSubscriptionSummary() {
+                    const resp = await fetch("{{ route('billing.subscription.summary') }}", {
+                        headers: { 'Accept': 'application/json' }
+                    });
+
+                    if (!resp.ok) return;
+
+                    const summary = await resp.json();
+                    renderSubscriptionSummary(summary);
+                }
+
+
+                function initSubscriptionRealtime() {
+                    if (typeof EventSource === 'undefined') return;
+
+                    const evt = new EventSource("{{ route('billing.subscription.stream') }}");
+
+                    evt.addEventListener('subscription', (event) => {
+                        try {
+                            const summary = JSON.parse(event.data || '{}');
+                            renderSubscriptionSummary(summary);
+                        } catch (_) {}
+                    });
+
+                    evt.onerror = () => {
+                        evt.close();
+                        setTimeout(initSubscriptionRealtime, 4000);
+                    };
+                }
+
+                const closeDocumentModal = () => {
+                    modalSubscriptionDocument?.classList.add('hidden');
+                    document.body.classList.remove('overflow-hidden');
+                };
+
+                const openDocumentModal = () => {
+                    modalSubscriptionDocument?.classList.remove('hidden');
+                    document.body.classList.add('overflow-hidden');
+                    if (subscriptionDocumentInput) subscriptionDocumentInput.value = loggedUserCpfCnpj || '';
+                };
+
+                modalSubscriptionDocument?.addEventListener('click', (e) => {
+                    if (e.target.matches('[data-doc-overlay]') || e.target.closest('[data-doc-close]')) {
+                        closeDocumentModal();
+                    }
+                });
+
+                async function createPixCheckout() {
+                    const resp = await fetch("{{ route('billing.subscription.checkout-pix') }}", {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                            'Accept': 'application/json'
+                        }
+                    });
+
+                    const payload = await resp.json();
+
+                    if (!resp.ok && resp.status !== 409) throw new Error(payload.message || 'Erro ao gerar PIX');
+
+                    const paymentData = payload.payment || payload;
+
+                    if (paymentData?.pix_copy_paste && paymentData?.pix_qr_code) {
+                        pixResult?.classList.remove('hidden');
+                        if (pixCopyPaste) pixCopyPaste.value = paymentData.pix_copy_paste || '';
+                        if (pixQrImage && paymentData.pix_qr_code) pixQrImage.src = `data:image/png;base64,${paymentData.pix_qr_code}`;
+
+                        if (subscriptionInvoiceLink && paymentData.invoice_url) {
+                            subscriptionInvoiceLink.classList.remove('hidden');
+                            subscriptionInvoiceLink.href = paymentData.invoice_url;
+                        }
+                    }
+
+                    await refreshSubscriptionSummary();
+                }
+
+                subscriptionDocumentForm?.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+
+                    try {
+                        const resp = await fetch("{{ route('billing.subscription.document') }}", {
+                            method: 'POST',
+                            headers: {
+                                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                                'Accept': 'application/json',
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ cpf_cnpj: subscriptionDocumentInput?.value || '' })
+                        });
+
+                        const payload = await resp.json();
+
+                        if (!resp.ok) throw new Error(payload.message || 'Erro ao salvar CPF/CNPJ');
+
+                        loggedUserCpfCnpj = payload.cpf_cnpj;
+                        closeDocumentModal();
+                        if (btnCheckoutPix?.classList.contains('hidden')) return;
+                        await createPixCheckout();
+                    } catch (err) {
+                        alert(err.message || 'Falha ao salvar documento');
+                    }
+                });
+
+                btnCheckoutPix?.addEventListener('click', async () => {
+                    try {
+                        if (!loggedUserCpfCnpj) {
+                            openDocumentModal();
+                            return;
+                        }
+
+                        await createPixCheckout();
+                    } catch (err) {
+                        alert(err.message || 'Falha no checkout');
+                    }
+                });
+
+                btnCopyPix?.addEventListener('click', async () => {
+                    if (!pixCopyPaste?.value) return;
+                    await navigator.clipboard.writeText(pixCopyPaste.value);
+                });
 
                 // clicar no botão editar do card
                 list.addEventListener('click', (e) => {
@@ -463,7 +748,10 @@
                     openModal();
                 });
 
-                window.addEventListener('DOMContentLoaded', loadData);
+                window.addEventListener('DOMContentLoaded', () => {
+                    loadData();
+                    initSubscriptionRealtime();
+                });
             })();
         </script>
     @endpush

@@ -14,10 +14,9 @@ class PermissionSeeder extends Seeder
         $adminRole = Role::firstOrCreate(['name' => 'admin']);
         $adminRole->syncPermissions(Permission::all());
 
-        $userRole = Role::firstOrCreate(['name' => 'user']);
-        $userRole->syncPermissions([]);
-
-        $userRole = Role::firstOrCreate(['name' => 'additional_user']);
-        $userRole->syncPermissions([]);
+        Role::firstOrCreate(['name' => 'trials'])->syncPermissions([]);
+        Role::firstOrCreate(['name' => 'subscript'])->syncPermissions([]);
+        Role::firstOrCreate(['name' => 'user'])->syncPermissions([]);
+        Role::firstOrCreate(['name' => 'additional_user'])->syncPermissions([]);
     }
 }
