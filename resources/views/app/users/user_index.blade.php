@@ -185,6 +185,28 @@
         <i class="fa fa-plus"></i>
     </button>
 
+
+    <div id="modalSubscriptionDocument" class="fixed inset-0 z-[90] hidden">
+        <div class="absolute inset-0 bg-black/50" data-doc-overlay></div>
+        <div class="relative mx-auto mt-24 w-[92%] max-w-md rounded-2xl border border-neutral-200/70 dark:border-neutral-800/70 bg-white dark:bg-neutral-900 p-4 shadow-xl">
+            <div class="flex items-center justify-between">
+                <h5 class="text-sm font-semibold">Informe CPF/CNPJ para assinatura</h5>
+                <button type="button" data-doc-close class="size-8 rounded-lg border border-neutral-200/70 dark:border-neutral-700">×</button>
+            </div>
+            <p class="text-xs text-neutral-500 dark:text-neutral-400 mt-2">Precisamos desse dado para gerar a cobrança PIX no Asaas.</p>
+            <form id="subscriptionDocumentForm" class="mt-3 space-y-3">
+                <label class="block text-sm">
+                    <span class="text-xs font-medium text-neutral-600 dark:text-neutral-300">CPF / CNPJ</span>
+                    <input type="text" id="subscriptionDocumentInput" name="cpf_cnpj" required placeholder="000.000.000-00" class="mt-1 w-full rounded-xl border border-neutral-200/70 dark:border-neutral-800/70 bg-white/90 dark:bg-neutral-900/70 px-3 py-2 text-sm">
+                </label>
+                <div class="flex items-center justify-end gap-2">
+                    <button type="button" data-doc-close class="px-3 py-1.5 rounded-lg text-xs border border-neutral-200 dark:border-neutral-700">Cancelar</button>
+                    <button type="submit" class="px-3 py-1.5 rounded-lg text-xs bg-brand-600 text-white">Salvar e continuar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <x-modal
         id="modalUser"
         formId="formUser"
@@ -219,6 +241,7 @@
                 const loggedUserName     = @json(auth()->user()->name);
                 const loggedUserEmail    = @json(auth()->user()->email);
                 const loggedUserIsActive = {{ auth()->user()->is_active ? '1' : '0' }};
+                let loggedUserCpfCnpj  = @json(auth()->user()->cpf_cnpj);
 
                 const usersCache = {}; // id => user
                 const btnCheckoutPix = document.getElementById('btnCheckoutPix');
@@ -227,6 +250,9 @@
                 const pixQrImage = document.getElementById('pixQrImage');
                 const btnCopyPix = document.getElementById('btnCopyPix');
                 const subscriptionInvoiceLink = document.getElementById('subscriptionInvoiceLink');
+                const modalSubscriptionDocument = document.getElementById('modalSubscriptionDocument');
+                const subscriptionDocumentForm = document.getElementById('subscriptionDocumentForm');
+                const subscriptionDocumentInput = document.getElementById('subscriptionDocumentInput');
 
                 if (!modal || !formEl || !list) {
                     console.warn('Modal, formUser ou userList não encontrados.');
@@ -329,6 +355,7 @@
                     const isActiveInput   = formEl.querySelector('[name="is_active"]');
                     const passwordInput   = formEl.querySelector('[name="password"]');
                     const passwordConfInp = formEl.querySelector('[name="password_confirmation"]');
+                    const cpfCnpjInput  = formEl.querySelector('[name="cpf_cnpj"]');
 
                     if (nameInput)  nameInput.value  = user.name  || '';
                     if (emailInput) emailInput.value = user.email || '';
@@ -337,6 +364,7 @@
                     }
                     if (passwordInput)   passwordInput.value   = '';
                     if (passwordConfInp) passwordConfInp.value = '';
+                    if (cpfCnpjInput) cpfCnpjInput.value = user.cpf_cnpj || '';
                 }
 
                 const openModal = () => {
@@ -370,6 +398,7 @@
                         name:      loggedUserName,
                         email:     loggedUserEmail,
                         is_active: loggedUserIsActive === '1',
+                        cpf_cnpj: loggedUserCpfCnpj || '',
                     };
                     setModeEdit(user);
                     openModal();
@@ -479,6 +508,7 @@
                     if (row.id === loggedUserId) {
                         if (profileName)  profileName.textContent  = row.name;
                         if (profileEmail) profileEmail.textContent = row.email;
+                        loggedUserCpfCnpj = row.cpf_cnpj || null;
 
                         const imgSrc = row.image ? `data:image/jpeg;base64,${row.image}` : assetUrl;
                         if (avatarImg) avatarImg.src = imgSrc;
@@ -502,28 +532,80 @@
 
 
 
-                btnCheckoutPix?.addEventListener('click', async () => {
+                const closeDocumentModal = () => {
+                    modalSubscriptionDocument?.classList.add('hidden');
+                    document.body.classList.remove('overflow-hidden');
+                };
+
+                const openDocumentModal = () => {
+                    modalSubscriptionDocument?.classList.remove('hidden');
+                    document.body.classList.add('overflow-hidden');
+                    if (subscriptionDocumentInput) subscriptionDocumentInput.value = loggedUserCpfCnpj || '';
+                };
+
+                modalSubscriptionDocument?.addEventListener('click', (e) => {
+                    if (e.target.matches('[data-doc-overlay]') || e.target.closest('[data-doc-close]')) {
+                        closeDocumentModal();
+                    }
+                });
+
+                async function createPixCheckout() {
+                    const resp = await fetch("{{ route('billing.subscription.checkout-pix') }}", {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                            'Accept': 'application/json'
+                        }
+                    });
+
+                    const payload = await resp.json();
+
+                    if (!resp.ok) throw new Error(payload.message || 'Erro ao gerar PIX');
+
+                    pixResult?.classList.remove('hidden');
+                    if (pixCopyPaste) pixCopyPaste.value = payload.pix_copy_paste || '';
+                    if (pixQrImage && payload.pix_qr_code) pixQrImage.src = `data:image/png;base64,${payload.pix_qr_code}`;
+
+                    if (subscriptionInvoiceLink && payload.invoice_url) {
+                        subscriptionInvoiceLink.classList.remove('hidden');
+                        subscriptionInvoiceLink.href = payload.invoice_url;
+                    }
+                }
+
+                subscriptionDocumentForm?.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+
                     try {
-                        const resp = await fetch("{{ route('billing.subscription.checkout-pix') }}", {
+                        const resp = await fetch("{{ route('billing.subscription.document') }}", {
                             method: 'POST',
                             headers: {
                                 'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                                'Accept': 'application/json'
-                            }
+                                'Accept': 'application/json',
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ cpf_cnpj: subscriptionDocumentInput?.value || '' })
                         });
 
                         const payload = await resp.json();
 
-                        if (!resp.ok) throw new Error(payload.message || 'Erro ao gerar PIX');
+                        if (!resp.ok) throw new Error(payload.message || 'Erro ao salvar CPF/CNPJ');
 
-                        pixResult?.classList.remove('hidden');
-                        if (pixCopyPaste) pixCopyPaste.value = payload.pix_copy_paste || '';
-                        if (pixQrImage && payload.pix_qr_code) pixQrImage.src = `data:image/png;base64,${payload.pix_qr_code}`;
+                        loggedUserCpfCnpj = payload.cpf_cnpj;
+                        closeDocumentModal();
+                        await createPixCheckout();
+                    } catch (err) {
+                        alert(err.message || 'Falha ao salvar documento');
+                    }
+                });
 
-                        if (subscriptionInvoiceLink && payload.invoice_url) {
-                            subscriptionInvoiceLink.classList.remove('hidden');
-                            subscriptionInvoiceLink.href = payload.invoice_url;
+                btnCheckoutPix?.addEventListener('click', async () => {
+                    try {
+                        if (!loggedUserCpfCnpj) {
+                            openDocumentModal();
+                            return;
                         }
+
+                        await createPixCheckout();
                     } catch (err) {
                         alert(err.message || 'Falha no checkout');
                     }

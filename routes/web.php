@@ -132,6 +132,7 @@ Route::middleware(['auth', config('jetstream.auth_session')])->group(function ()
 
         // Billing / Assinatura
         Route::get('/billing/subscription', [SubscriptionController::class, 'summary'])->name('billing.subscription.summary');
+        Route::post('/billing/subscription/document', [SubscriptionController::class, 'updateDocument'])->name('billing.subscription.document');
         Route::post('/billing/subscription/checkout-pix', [SubscriptionController::class, 'checkoutPix'])->name('billing.subscription.checkout-pix');
 
         Route::prefix('support')

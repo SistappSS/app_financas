@@ -34,13 +34,45 @@ class SubscriptionController extends Controller
             'current_period_ends_at' => optional($subscription->current_period_ends_at)?->toDateTimeString(),
             'is_trial' => $this->subscriptionService->isTrial($user),
             'has_access' => $this->subscriptionService->isActive($user),
+            'cpf_cnpj' => $user->cpf_cnpj,
             'latest_payment' => $latestPayment,
         ]);
+    }
+
+    public function updateDocument(Request $request)
+    {
+        $data = $request->validate([
+            'cpf_cnpj' => ['required', 'string', 'max:18'],
+        ]);
+
+        $cleanDoc = preg_replace('/\D+/', '', $data['cpf_cnpj']);
+
+        if (!in_array(strlen((string) $cleanDoc), [11, 14], true)) {
+            return response()->json([
+                'message' => 'Informe um CPF/CNPJ válido.',
+            ], 422);
+        }
+
+        $user = $request->user();
+        $user->forceFill(['cpf_cnpj' => $data['cpf_cnpj']])->save();
+
+        if ($user->asaas_customer_id) {
+            $this->asaasService->updateCustomerDocument($user);
+        }
+
+        return response()->json(['cpf_cnpj' => $user->cpf_cnpj]);
     }
 
     public function checkoutPix(Request $request)
     {
         $user = $request->user();
+
+        if (!$user->cpf_cnpj) {
+            return response()->json([
+                'message' => 'Cadastre CPF/CNPJ antes de gerar a cobrança.',
+            ], 422);
+        }
+
         $subscription = $this->subscriptionService->bootstrapSubscription($user);
 
         $customerId = $this->asaasService->ensureCustomer($user);

@@ -55,6 +55,7 @@ class UserController extends Controller
             'email'     => ['required','email','max:255','unique:users,email'],
             'password'  => ['required','confirmed','string','min:6'],
             'is_active' => ['nullable','boolean'],
+            'cpf_cnpj'  => ['nullable','string','max:18'],
             // NÃO validamos image aqui; processamos manualmente
         ]);
 
@@ -71,6 +72,7 @@ class UserController extends Controller
                 'password'  => Hash::make($data['password']),
                 'is_active' => $data['is_active'] ?? true,
                 'image'     => $imagemBase64,
+                'cpf_cnpj'  => $data['cpf_cnpj'] ?? null,
             ]);
 
             $newUser->assignRole('additional_user');
@@ -87,6 +89,7 @@ class UserController extends Controller
             'email'     => $newUser->email,
             'is_active' => (bool) $newUser->is_active,
             'image'     => $newUser->image,
+            'cpf_cnpj'  => $newUser->cpf_cnpj,
         ], 201);
     }
 
@@ -99,6 +102,7 @@ class UserController extends Controller
             'email'     => ['sometimes','required','email','max:255','unique:users,email,' . $user->id],
             'password'  => ['nullable','confirmed','string','min:6'],
             'is_active' => ['sometimes','boolean'],
+            'cpf_cnpj'  => ['sometimes','nullable','string','max:18'],
         ]);
 
         if (array_key_exists('name', $data)) {
@@ -117,6 +121,10 @@ class UserController extends Controller
             $user->is_active = $data['is_active'];
         }
 
+        if (array_key_exists('cpf_cnpj', $data)) {
+            $user->cpf_cnpj = $data['cpf_cnpj'];
+        }
+
         $imagemBase64 = $this->processImage($request);
         if ($imagemBase64 !== null) {
             $user->image = $imagemBase64;
@@ -130,6 +138,7 @@ class UserController extends Controller
             'email'     => $user->email,
             'is_active' => (bool) $user->is_active,
             'image'     => $user->image,
+            'cpf_cnpj'  => $user->cpf_cnpj,
         ]);
     }
 

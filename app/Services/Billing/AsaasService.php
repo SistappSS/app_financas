@@ -28,13 +28,30 @@ class AsaasService
             return $user->asaas_customer_id;
         }
 
-        $response = $this->client()->post('/customers', [
+        $payload = [
             'name' => $user->name,
             'email' => $user->email,
             'externalReference' => $user->id,
-        ])->throw()->json();
+        ];
+
+        if ($user->cpf_cnpj) {
+            $payload['cpfCnpj'] = preg_replace('/\D+/', '', $user->cpf_cnpj);
+        }
+
+        $response = $this->client()->post('/customers', $payload)->throw()->json();
 
         return (string) ($response['id'] ?? '');
+    }
+
+    public function updateCustomerDocument(User $user): void
+    {
+        if (! $user->asaas_customer_id || ! $user->cpf_cnpj) {
+            return;
+        }
+
+        $this->client()->post('/customers/'.$user->asaas_customer_id, [
+            'cpfCnpj' => preg_replace('/\D+/', '', $user->cpf_cnpj),
+        ])->throw();
     }
 
     public function createPixPayment(string $customerId, array $payload): array
