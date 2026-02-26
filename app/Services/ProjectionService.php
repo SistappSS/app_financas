@@ -104,8 +104,9 @@ class ProjectionService
                 $occ   = $buildOcc($globalFrom, $to);
                 $bills = $buildBills($globalFrom, $to);
 
-                // começa em 0 + cofrinhos selecionados
-                $globalOpening = $savingsBalance;
+                // sem livro-razão ainda: usa saldo real atual das contas (+ cofrinhos selecionados)
+                // para não iniciar projeção em zero quando já existe valor em conta.
+                $globalOpening = $effectiveCurrent ?? $savingsBalance;
 
                 $daysAll = $this->consolidateDays($globalFrom, $to, $globalOpening, $occ, $bills);
 
@@ -249,7 +250,7 @@ class ProjectionService
         $rows = DB::table('payment_transactions as pt')
             ->join('transactions as t', 't.id', '=', 'pt.transaction_id')
             ->whereIn('t.user_id', $userIds)
-            ->get(['pt.transaction_id','pt.payment_date','pt.reference_year','pt.reference_month']);
+            ->get(['pt.transaction_id','pt.payment_date','pt.reference_date','pt.reference_year','pt.reference_month']);
 
         $byMonth = [];
         $byDate  = [];
@@ -260,9 +261,16 @@ class ProjectionService
                 $ym = sprintf('%04d-%02d', (int)$r->reference_year, (int)$r->reference_month);
                 $byMonth[$r->transaction_id][$ym] = true;
             }
+            // para "pago?" por ocorrência, a referência correta é a data do vencimento/ocorrência
+            // (reference_date). payment_date é a data efetiva da baixa e continua sendo usada
+            // para exibir o movimento no dia exato em expandPaymentTransactions().
+            if (!empty($r->reference_date)) {
+                $ref = Carbon::parse($r->reference_date)->toDateString();
+                $byDate[$r->transaction_id][$ref] = true;
+            }
+
             if ($r->payment_date) {
                 $d = Carbon::parse($r->payment_date)->toDateString();
-                $byDate[$r->transaction_id][$d] = true;
                 $anyMin[$r->transaction_id] = isset($anyMin[$r->transaction_id])
                     ? min($anyMin[$r->transaction_id], $d)
                     : $d;

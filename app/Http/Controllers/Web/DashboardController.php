@@ -1068,6 +1068,15 @@ if ($existsSameRef) {
                 return;
             }
 
+            $paymentAt = Carbon::parse($pt->payment_date)->startOfDay();
+            $today = now('America/Sao_Paulo')->startOfDay();
+
+            // só impacta saldo atual imediatamente se a baixa for hoje ou no passado.
+            // para baixa futura, o impacto deve aparecer apenas na projeção da data futura.
+            if ($paymentAt->gt($today)) {
+                return;
+            }
+
             if ($type === 'entrada') {
                 // aumenta saldo
                 $account->increment('current_balance', $value);
