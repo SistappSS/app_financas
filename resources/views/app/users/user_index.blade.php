@@ -156,13 +156,14 @@
                 Renove seu plano para não perder acesso...
             </div>
 
-            <div class="mt-3 flex flex-wrap items-center gap-2">
+            <div id="subscriptionCheckoutActions" class="mt-3 flex flex-wrap items-center gap-2">
                 <button type="button" id="btnCheckoutPix" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-emerald-600 text-white hover:bg-emerald-700">
                     <i class="fa-solid fa-qrcode"></i>
                     Adquirir assinatura
                 </button>
                 <a href="#" id="subscriptionInvoiceLink" target="_blank" class="hidden text-xs underline text-brand-600">Abrir fatura</a>
             </div>
+            <p id="subscriptionCheckoutHint" class="hidden mt-2 text-[11px] text-neutral-500 dark:text-neutral-400"></p>
 
             <div id="pixResult" class="hidden mt-3 rounded-xl border border-neutral-200/70 dark:border-neutral-700 p-3">
                 <p class="text-xs mb-2">PIX copia e cola:</p>
@@ -256,6 +257,8 @@
                 const pixQrImage = document.getElementById('pixQrImage');
                 const btnCopyPix = document.getElementById('btnCopyPix');
                 const subscriptionInvoiceLink = document.getElementById('subscriptionInvoiceLink');
+                const subscriptionCheckoutActions = document.getElementById('subscriptionCheckoutActions');
+                const subscriptionCheckoutHint = document.getElementById('subscriptionCheckoutHint');
                 const modalSubscriptionDocument = document.getElementById('modalSubscriptionDocument');
                 const subscriptionDocumentForm = document.getElementById('subscriptionDocumentForm');
                 const subscriptionDocumentInput = document.getElementById('subscriptionDocumentInput');
@@ -575,6 +578,23 @@
 
                     subscriptionRenewAlert?.classList.toggle('hidden', !summary.is_renewal_alert);
 
+                    const canCheckout = !!summary.can_checkout;
+                    const hasPending = !!summary.pending_payment;
+
+                    if (btnCheckoutPix) {
+                        btnCheckoutPix.classList.toggle('hidden', !canCheckout && !hasPending);
+                    }
+
+                    if (subscriptionCheckoutActions) {
+                        subscriptionCheckoutActions.classList.toggle('hidden', !canCheckout && !hasPending);
+                    }
+
+                    if (subscriptionCheckoutHint) {
+                        const msg = summary.checkout_block_reason || '';
+                        subscriptionCheckoutHint.textContent = msg;
+                        subscriptionCheckoutHint.classList.toggle('hidden', !msg || hasPending);
+                    }
+
                     const pendingPayment = summary.pending_payment;
 
                     if (pendingPayment?.pix_copy_paste && pendingPayment?.pix_qr_code) {
@@ -690,6 +710,7 @@
 
                         loggedUserCpfCnpj = payload.cpf_cnpj;
                         closeDocumentModal();
+                        if (btnCheckoutPix?.classList.contains('hidden')) return;
                         await createPixCheckout();
                     } catch (err) {
                         alert(err.message || 'Falha ao salvar documento');

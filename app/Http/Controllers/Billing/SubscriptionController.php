@@ -58,6 +58,12 @@ class SubscriptionController extends Controller
         }
 
         $pendingPayment = $latestPayment && $latestPayment->status === 'pending' ? $latestPayment : null;
+        [$canCheckout, $checkoutBlockReason] = $this->subscriptionService->canGenerateChargeNow($user->fresh());
+
+        if ($pendingPayment) {
+            $canCheckout = true;
+            $checkoutBlockReason = null;
+        }
 
         return [
             'plan_name' => $subscription->plan_name,
@@ -73,6 +79,8 @@ class SubscriptionController extends Controller
             'cpf_cnpj' => $user->cpf_cnpj,
             'latest_payment' => $latestPayment,
             'pending_payment' => $pendingPayment,
+            'can_checkout' => $canCheckout,
+            'checkout_block_reason' => $checkoutBlockReason,
         ];
     }
 

@@ -28,8 +28,14 @@ class AsaasWebhookController extends Controller
         }
 
         $event = (string) $request->input('event');
-        $paymentId = (string) $request->input('payment.id');
-        $externalReference = (string) $request->input('payment.externalReference');
+        $paymentNode = $request->input('payment');
+
+        $paymentId = (string) ($request->input('payment.id')
+            ?? (is_array($paymentNode) ? ($paymentNode['id'] ?? null) : $paymentNode));
+
+        $externalReference = (string) ($request->input('payment.externalReference')
+            ?? (is_array($paymentNode) ? ($paymentNode['externalReference'] ?? null) : null)
+            ?? $request->input('externalReference'));
 
         if (!$paymentId && !$externalReference) {
             return response()->json(['ok' => true]);
