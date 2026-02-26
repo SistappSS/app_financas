@@ -33,6 +33,16 @@
         })();
     </script>
 
+    <script>
+        (function () {
+            window.addEventListener('pageshow', function (event) {
+                if (!event.persisted) return;
+
+                window.location.reload();
+            });
+        })();
+    </script>
+
     <!-- Tailwind CDN + config -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>

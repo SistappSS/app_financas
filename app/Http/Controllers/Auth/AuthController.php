@@ -7,6 +7,7 @@ use App\Http\Requests\Auth\LoginUserRequest;
 use App\Http\Requests\Auth\RegisterUserRequest;
 use Illuminate\Contracts\Auth\StatefulGuard;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
 use Laravel\Fortify\Contracts\LogoutResponse;
 
@@ -82,24 +83,37 @@ class AuthController extends Controller
         $this->guard->logout();
 
         if ($request->hasSession()) {
-            $request->session()->invalidate();
             $request->session()->regenerateToken();
         }
 
         return app(LogoutResponse::class);
     }
 
-    public function welcome()
+    public function welcome(Request $request): Response|\Illuminate\Http\RedirectResponse
     {
         if (Auth::check()) {
             return redirect()->route('dashboard');
         }
 
-        return view('auth.login');
+        return $this->authPageResponse($request, 'auth.login');
     }
 
-    public function registerView()
+    public function registerView(Request $request): Response
     {
-        return view('auth.register');
+        return $this->authPageResponse($request, 'auth.register');
+    }
+
+    private function authPageResponse(Request $request, string $view): Response
+    {
+        if ($request->hasSession()) {
+            $request->session()->regenerateToken();
+        }
+
+        return response()
+            ->view($view)
+            ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0, private')
+            ->header('Pragma', 'no-cache')
+            ->header('Expires', '0')
+            ->header('Vary', 'Cookie');
     }
 }
