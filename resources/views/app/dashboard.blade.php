@@ -346,6 +346,7 @@
         <label class="block">
             <span class="text-xs text-neutral-500 dark:text-neutral-400">Data do pagamento</span>
             <input type="date" name="payment_date" id="payment_date"
+                   max="{{ now('America/Sao_Paulo')->toDateString() }}"
                    class="mt-1 w-full rounded-xl border border-neutral-200/70 dark:border-neutral-800/70 bg-white/90 dark:bg-neutral-900/70 px-3 py-2"
                    required>
         </label>
@@ -366,6 +367,7 @@
         <label class="block">
             <span class="text-xs text-neutral-500 dark:text-neutral-400">Nova data</span>
             <input type="date" name="date" id="adjust_date"
+                   min="{{ now('America/Sao_Paulo')->toDateString() }}"
                    class="mt-1 w-full rounded-xl border border-neutral-200/70 dark:border-neutral-800/70 bg-white/90 dark:bg-neutral-900/70 px-3 py-2"
                    required>
         </label>
@@ -466,6 +468,7 @@
             }
 
             const formatBRL = v => Number(v || 0).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
+            const todayIso = new Date().toISOString().slice(0, 10);
 
             function renderBreakdown(elId, k, root, label = 'atrasados') {
                 const el = document.getElementById(elId);
@@ -517,7 +520,10 @@
         form.action = ADJUST_TPL.replace('__ID__', CURRENT_ID);
         if (inAmt) inAmt.value = Number(btnAdjustTx.dataset.amount || 0).toFixed(2).replace('.', ',');
         const baseDate = (btnAdjustTx.dataset.date || '').slice(0, 10);
-        if (inDate) inDate.value = baseDate;
+        if (inDate) {
+            inDate.min = todayIso;
+            inDate.value = baseDate && baseDate >= todayIso ? baseDate : todayIso;
+        }
         if (refInput) refInput.value = baseDate;
 
         const recType = (btnAdjustTx.dataset.recurrenceType || 'unique').toLowerCase();
@@ -545,8 +551,11 @@
 
 form.action = PAY_TPL.replace('__ID__', CURRENT_ID);
 if (inAmt)      inAmt.value = btnPayTx.dataset.amount || '0';
-if (inDate)     inDate.value = CURRENT_DUE_DATE;
-if (dueHidden)  dueHidden.value = CURRENT_DUE_DATE; // aqui ele passa 29/12/2025
+if (inDate) {
+    inDate.max = todayIso;
+    inDate.value = CURRENT_DUE_DATE && CURRENT_DUE_DATE <= todayIso ? CURRENT_DUE_DATE : todayIso;
+}
+if (dueHidden)  dueHidden.value = CURRENT_DUE_DATE;
         showPaymentModal();
         return;
     }

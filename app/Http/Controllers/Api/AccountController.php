@@ -87,9 +87,28 @@ class AccountController extends Controller
 
         $account = $this->account->find($id);
 
-        $account->update($data);
+        DB::transaction(function () use (&$account, $data) {
+            $previousBalance = (float) $account->current_balance;
+            $account->update($data);
 
-        return response()->json($account);
+            if (array_key_exists('current_balance', $data)) {
+                $newBalance = (float) $account->current_balance;
+                $delta = round($newBalance - $previousBalance, 2);
+
+                if ($delta != 0.0) {
+                    app(LedgerService::class)->recordAccount(
+                        (string) $account->user_id,
+                        (string) $account->id,
+                        'correction',
+                        $delta,
+                        now('America/Sao_Paulo'),
+                        'Ajuste manual de saldo'
+                    );
+                }
+            }
+        });
+
+        return response()->json($account->fresh());
     }
 
     public function destroy($id)
