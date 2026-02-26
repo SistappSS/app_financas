@@ -9,6 +9,7 @@ use App\Models\TransactionCategory;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Auth;
+use App\Services\Billing\SubscriptionService;
 
 use App\Models\Transaction;
 use App\Models\Account;
@@ -82,7 +83,8 @@ class TransactionController extends Controller
             $q->whereIn('transaction_category_id', $catIds);
         }
 
-        $transactions = $q->orderBy('create_date', 'asc')->get();
+        $q = app(SubscriptionService::class)->applyReadLimit($req->user(), $q->orderBy('create_date', 'asc'), 'transactions');
+        $transactions = $q->get();
 
         $transactions->each(function ($t) {
             $t->amount = brlPrice($t->amount);
@@ -102,6 +104,7 @@ class TransactionController extends Controller
 
     public function store(Request $request)
     {
+        app(SubscriptionService::class)->enforceCreateLimit($request->user(), 'transactions', Transaction::class);
         $request->validate([
             'title' => 'required|string|max:255',
             'transaction_category_id' => 'required|uuid|exists:transaction_categories,id',

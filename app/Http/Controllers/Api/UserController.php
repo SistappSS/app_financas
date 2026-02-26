@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\AdditionalUser;
 use App\Models\Auth\User;
+use App\Services\Billing\SubscriptionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -43,13 +44,12 @@ class UserController extends Controller
             ->where('id', '!=', $authUser->id)
             ->values();
 
-        return $request->wantsJson()
-            ? response()->json($users)
-            : view('app.users.user_index', compact('users'));
+        return response()->json($users);
     }
 
     public function store(Request $request)
     {
+        app(SubscriptionService::class)->enforceCreateLimit($request->user(), 'additional_users', AdditionalUser::class);
         $data = $request->validate([
             'name'      => ['required','string','max:255'],
             'email'     => ['required','email','max:255','unique:users,email'],

@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use App\Services\Billing\SubscriptionService;
 
 class AccountController extends Controller
 {
@@ -54,6 +55,7 @@ class AccountController extends Controller
 
     public function store(Request $request)
     {
+        app(SubscriptionService::class)->enforceCreateLimit($request->user(), 'accounts', Account::class);
         $account = $this->account->create([
             'user_id' => Auth::id(),
             'bank_name' => $request->bank_name,

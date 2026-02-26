@@ -6,6 +6,7 @@ use App\Models\TransactionCategory;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Auth;
+use App\Services\Billing\SubscriptionService;
 use Illuminate\Validation\Rule;
 
 class TransactionCategoryController extends Controller
@@ -26,6 +27,7 @@ class TransactionCategoryController extends Controller
 
     public function store(Request $request)
     {
+        app(SubscriptionService::class)->enforceCreateLimit($request->user(), 'transaction_categories', TransactionCategory::class);
         $data = $request->validate([
             'name'           => 'required|string|max:255',
             'type'           => ['required', Rule::in(['entrada','despesa','investimento'])],
