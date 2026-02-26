@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Investment;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use App\Services\Billing\SubscriptionService;
 
 class InvestmentController extends Controller
 {
@@ -23,6 +24,7 @@ class InvestmentController extends Controller
     // POST /api/investments
     public function store(Request $request)
     {
+        app(SubscriptionService::class)->enforceCreateLimit($request->user(), 'transactions', Investment::class);
         $data = $request->validate([
             'name'           => 'required|string|max:255',
             'purchase_value' => 'required|numeric|min:0',
