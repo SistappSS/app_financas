@@ -291,6 +291,7 @@ class DashboardController extends Controller
                     'category_name' => $cat?->name,
                     'type' => $type,
                     'transaction_id' => (string)$t->id,
+                    'recurrence_type' => (string)($t->recurrence_type ?? 'unique'),
                 ],
             ]);
         }
@@ -552,6 +553,7 @@ class DashboardController extends Controller
                 'category_name' => $cat?->name,
                 'type' => $type,
                 'transaction_id' => (string)$t->id, // <- importante
+                'recurrence_type' => (string)($t->recurrence_type ?? 'unique'),
             ],
         ];
     }
@@ -873,7 +875,51 @@ class DashboardController extends Controller
         $data = $request->validate([
             'amount' => ['required', 'numeric', 'min:0.01'],
             'date' => ['required', 'date'],
+            'scope' => ['nullable', 'in:series,occurrence'],
+            'reference_date' => ['nullable', 'date'],
         ]);
+
+        $scope = $data['scope'] ?? 'series';
+
+        if ($scope === 'occurrence' && in_array($transaction->recurrence_type, ['monthly', 'yearly', 'custom'], true)) {
+            $refDate = !empty($data['reference_date'])
+                ? Carbon::parse($data['reference_date'])->toDateString()
+                : Carbon::parse($transaction->date)->toDateString();
+
+            $exists = PaymentTransaction::where('transaction_id', $transaction->id)
+                ->whereDate('reference_date', $refDate)
+                ->exists();
+
+            if (! $exists) {
+                PaymentTransaction::create([
+                    'transaction_id' => $transaction->id,
+                    'title' => $transaction->title,
+                    'amount' => 0,
+                    'payment_date' => $refDate,
+                    'reference_date' => $refDate,
+                    'reference_month' => Carbon::parse($refDate)->format('m'),
+                    'reference_year' => Carbon::parse($refDate)->format('Y'),
+                    'account_id' => $transaction->account_id,
+                ]);
+            }
+
+            $clone = $transaction->replicate(['id', 'created_at', 'updated_at', 'uuid']);
+            $clone->recurrence_type = 'unique';
+            $clone->amount = (float) $data['amount'];
+            $clone->date = Carbon::parse($data['date'])->toDateString();
+            $clone->create_date = Carbon::parse($data['date'])->toDateString();
+            $clone->save();
+
+            return response()->json([
+                'ok' => true,
+                'transaction_id' => (string) $clone->id,
+                'source_transaction_id' => (string) $transaction->id,
+                'amount' => (float) $clone->amount,
+                'amount_brl' => brlPrice($clone->amount),
+                'date' => Carbon::parse($clone->date)->toDateString(),
+                'scope' => 'occurrence',
+            ]);
+        }
 
         $transaction->update([
             'amount' => (float) $data['amount'],
@@ -886,6 +932,7 @@ class DashboardController extends Controller
             'amount' => (float) $transaction->amount,
             'amount_brl' => brlPrice($transaction->amount),
             'date' => Carbon::parse($transaction->date)->toDateString(),
+            'scope' => 'series',
         ]);
     }
 
