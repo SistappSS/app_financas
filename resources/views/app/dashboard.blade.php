@@ -380,6 +380,26 @@
     </div>
 </x-modal>
 
+<x-modal id="adjustModal" titleCreate="Ajustar transação" titleEdit="Ajustar transação" titleShow="Ajustar transação" submitLabel="Salvar ajuste">
+    @csrf
+    @method('PATCH')
+    <input type="hidden" name="transaction_id" id="adjust_transaction_id">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <label class="block">
+            <span class="text-xs text-neutral-500 dark:text-neutral-400">Novo valor</span>
+            <input type="text" inputmode="decimal" name="amount" id="adjust_amount"
+                   class="mt-1 w-full rounded-xl border border-neutral-200/70 dark:border-neutral-800/70 bg-white/90 dark:bg-neutral-900/70 px-3 py-2"
+                   required>
+        </label>
+        <label class="block">
+            <span class="text-xs text-neutral-500 dark:text-neutral-400">Nova data</span>
+            <input type="date" name="date" id="adjust_date"
+                   class="mt-1 w-full rounded-xl border border-neutral-200/70 dark:border-neutral-800/70 bg-white/90 dark:bg-neutral-900/70 px-3 py-2"
+                   required>
+        </label>
+    </div>
+</x-modal>
+
     @push('scripts')
         <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
         <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/pt.js"></script>
