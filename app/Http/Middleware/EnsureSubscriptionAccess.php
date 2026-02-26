@@ -31,6 +31,7 @@ class EnsureSubscriptionAccess
             'users.index',
             'users.update',
             'billing.subscription.summary',
+            'billing.subscription.stream',
             'billing.subscription.document',
             'billing.subscription.checkout-pix',
             'logout',

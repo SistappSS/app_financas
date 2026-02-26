@@ -63,6 +63,28 @@ class SubscriptionService
         ];
     }
 
+    public function canGenerateChargeNow(User $user): array
+    {
+        $state = $this->syncUserAccess($user);
+        $windowDays = (int) config('asaas.plan.renewal_alert_days', 3);
+
+        if ($state['is_trial'] && $state['trial_ends_at']) {
+            $daysToTrialEnd = now()->diffInDays($state['trial_ends_at'], false);
+            if ($daysToTrialEnd > $windowDays) {
+                return [false, 'Pagamento liberado apenas nos últimos 3 dias do período grátis.'];
+            }
+        }
+
+        if ($state['is_subscriber'] && $state['subscriber_until']) {
+            $daysToExpire = now()->diffInDays($state['subscriber_until'], false);
+            if ($daysToExpire > $windowDays) {
+                return [false, 'Assinante até '.$state['subscriber_until']->format('d/m/Y H:i').'. O pagamento só é liberado nos 3 dias finais.'];
+            }
+        }
+
+        return [true, null];
+    }
+
     public function syncUserAccess(User $user): array
     {
         $state = $this->getState($user);
@@ -145,13 +167,14 @@ class SubscriptionService
     public function markPaymentReceived(SubscriptionPayment $payment): void
     {
         $payment->loadMissing('user', 'subscription');
+
+        if ($payment->status === 'received') {
+            return;
+        }
+
         $subscription = $payment->subscription ?: $this->bootstrapSubscription($payment->user);
 
-        $baseDate = $subscription->current_period_ends_at && $subscription->current_period_ends_at->isFuture()
-            ? $subscription->current_period_ends_at
-            : Carbon::now();
-
-        $endsAt = $baseDate->copy()->addDays((int) config('asaas.plan.billing_cycle_days', 30));
+        $endsAt = Carbon::now()->addDays((int) config('asaas.plan.billing_cycle_days', 30));
 
         $subscription->update([
             'status' => 'active',

@@ -605,6 +605,25 @@
                     renderSubscriptionSummary(summary);
                 }
 
+
+                function initSubscriptionRealtime() {
+                    if (typeof EventSource === 'undefined') return;
+
+                    const evt = new EventSource("{{ route('billing.subscription.stream') }}");
+
+                    evt.addEventListener('subscription', (event) => {
+                        try {
+                            const summary = JSON.parse(event.data || '{}');
+                            renderSubscriptionSummary(summary);
+                        } catch (_) {}
+                    });
+
+                    evt.onerror = () => {
+                        evt.close();
+                        setTimeout(initSubscriptionRealtime, 4000);
+                    };
+                }
+
                 const closeDocumentModal = () => {
                     modalSubscriptionDocument?.classList.add('hidden');
                     document.body.classList.remove('overflow-hidden');
@@ -633,15 +652,19 @@
 
                     const payload = await resp.json();
 
-                    if (!resp.ok) throw new Error(payload.message || 'Erro ao gerar PIX');
+                    if (!resp.ok && resp.status !== 409) throw new Error(payload.message || 'Erro ao gerar PIX');
 
-                    pixResult?.classList.remove('hidden');
-                    if (pixCopyPaste) pixCopyPaste.value = payload.pix_copy_paste || '';
-                    if (pixQrImage && payload.pix_qr_code) pixQrImage.src = `data:image/png;base64,${payload.pix_qr_code}`;
+                    const paymentData = payload.payment || payload;
 
-                    if (subscriptionInvoiceLink && payload.invoice_url) {
-                        subscriptionInvoiceLink.classList.remove('hidden');
-                        subscriptionInvoiceLink.href = payload.invoice_url;
+                    if (paymentData?.pix_copy_paste && paymentData?.pix_qr_code) {
+                        pixResult?.classList.remove('hidden');
+                        if (pixCopyPaste) pixCopyPaste.value = paymentData.pix_copy_paste || '';
+                        if (pixQrImage && paymentData.pix_qr_code) pixQrImage.src = `data:image/png;base64,${paymentData.pix_qr_code}`;
+
+                        if (subscriptionInvoiceLink && paymentData.invoice_url) {
+                            subscriptionInvoiceLink.classList.remove('hidden');
+                            subscriptionInvoiceLink.href = paymentData.invoice_url;
+                        }
                     }
 
                     await refreshSubscriptionSummary();
@@ -704,7 +727,10 @@
                     openModal();
                 });
 
-                window.addEventListener('DOMContentLoaded', loadData);
+                window.addEventListener('DOMContentLoaded', () => {
+                    loadData();
+                    initSubscriptionRealtime();
+                });
             })();
         </script>
     @endpush

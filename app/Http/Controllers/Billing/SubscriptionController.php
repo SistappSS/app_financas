@@ -18,7 +18,31 @@ class SubscriptionController extends Controller
 
     public function summary(Request $request)
     {
+        return response()->json($this->buildSummary($request->user()));
+    }
+
+    public function stream(Request $request)
+    {
         $user = $request->user();
+
+        return response()->stream(function () use ($user) {
+            for ($i = 0; $i < 12; $i++) {
+                $summary = $this->buildSummary($user->fresh());
+                echo "event: subscription\n";
+                echo 'data: '.json_encode($summary)."\n\n";
+                @ob_flush();
+                @flush();
+                sleep(5);
+            }
+        }, 200, [
+            'Content-Type' => 'text/event-stream',
+            'Cache-Control' => 'no-cache',
+            'Connection' => 'keep-alive',
+        ]);
+    }
+
+    private function buildSummary($user): array
+    {
         $state = $this->subscriptionService->syncUserAccess($user);
         $subscription = $state['subscription'];
 
@@ -35,7 +59,7 @@ class SubscriptionController extends Controller
 
         $pendingPayment = $latestPayment && $latestPayment->status === 'pending' ? $latestPayment : null;
 
-        return response()->json([
+        return [
             'plan_name' => $subscription->plan_name,
             'amount' => $subscription->amount,
             'status' => $subscription->status,
@@ -49,7 +73,7 @@ class SubscriptionController extends Controller
             'cpf_cnpj' => $user->cpf_cnpj,
             'latest_payment' => $latestPayment,
             'pending_payment' => $pendingPayment,
-        ]);
+        ];
     }
 
     public function updateDocument(Request $request)
@@ -86,6 +110,11 @@ class SubscriptionController extends Controller
             ], 422);
         }
 
+        [$allowedNow, $reason] = $this->subscriptionService->canGenerateChargeNow($user);
+        if (!$allowedNow) {
+            return response()->json(['message' => $reason], 422);
+        }
+
         $subscription = $this->subscriptionService->bootstrapSubscription($user);
 
         $openPending = SubscriptionPayment::query()
@@ -94,12 +123,17 @@ class SubscriptionController extends Controller
             ->latest()
             ->first();
 
-        if ($openPending && $openPending->asaas_payment_id) {
-            $this->syncPaymentFromGateway($openPending);
-            $openPending = $openPending->fresh();
+        if ($openPending) {
+            if ($openPending->asaas_payment_id) {
+                $this->syncPaymentFromGateway($openPending);
+                $openPending = $openPending->fresh();
+            }
 
             if ($openPending && $openPending->status === 'pending') {
-                return response()->json($openPending);
+                return response()->json([
+                    'message' => 'Já existe um PIX pendente para esta assinatura.',
+                    'payment' => $openPending,
+                ], 409);
             }
         }
 

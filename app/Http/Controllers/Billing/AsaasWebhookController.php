@@ -18,22 +18,37 @@ class AsaasWebhookController extends Controller
         $tokenHeader = $request->header('asaas-access-token')
             ?? $request->header('asaas_access_token')
             ?? $request->header('Asaas-Access-Token');
+
         $expected = config('asaas.sandbox')
             ? config('asaas.webhook_token_sandbox')
             : config('asaas.webhook_token_production');
 
-        abort_unless($expected && hash_equals($expected, (string) $tokenHeader), 401);
+        if (!empty($expected) && !hash_equals((string) $expected, (string) $tokenHeader)) {
+            return response()->json(['ok' => false, 'message' => 'Invalid webhook token'], 401);
+        }
 
         $event = (string) $request->input('event');
         $paymentId = (string) $request->input('payment.id');
+        $externalReference = (string) $request->input('payment.externalReference');
 
-        if (!$paymentId) {
+        if (!$paymentId && !$externalReference) {
             return response()->json(['ok' => true]);
         }
 
-        $payment = SubscriptionPayment::where('asaas_payment_id', $paymentId)->first();
+        $payment = null;
+        if ($paymentId) {
+            $payment = SubscriptionPayment::where('asaas_payment_id', $paymentId)->first();
+        }
+
+        if (!$payment && $externalReference) {
+            $payment = SubscriptionPayment::where('id', $externalReference)->first();
+        }
 
         if (!$payment) {
+            return response()->json(['ok' => true]);
+        }
+
+        if ($payment->status === 'received') {
             return response()->json(['ok' => true]);
         }
 
