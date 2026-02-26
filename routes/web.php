@@ -4,6 +4,8 @@ use App\Http\Controllers\DailyDigestController;
 use App\Http\Controllers\ProjectionController;
 use App\Http\Controllers\PushController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Billing\SubscriptionController;
+use App\Http\Controllers\Billing\AsaasWebhookController;
 
 // Auth
 use App\Http\Controllers\Auth\AuthController;
@@ -49,7 +51,7 @@ Route::middleware('guest')->group(function () {
 
 Route::any('/logout', [AuthController::class, 'destroy'])->name('logout');
 
-Route::middleware(['auth', config('jetstream.auth_session')])->group(function () {
+Route::middleware(['auth', config('jetstream.auth_session'), 'subscription.access'])->group(function () {
     Route::middleware('partial')->group(function () {
         // Dashboard
         Route::get('/dashboard', [WebDashboardController::class, 'dashboard'])->name('dashboard');
@@ -127,6 +129,13 @@ Route::middleware(['auth', config('jetstream.auth_session')])->group(function ()
         // Charts
         Route::get('/api/analytics/pie', [ChartController::class, 'pie'])->name('analytics.pie');
 
+
+        // Billing / Assinatura
+        Route::get('/billing/subscription', [SubscriptionController::class, 'summary'])->name('billing.subscription.summary');
+        Route::get('/billing/subscription/stream', [SubscriptionController::class, 'stream'])->name('billing.subscription.stream');
+        Route::post('/billing/subscription/document', [SubscriptionController::class, 'updateDocument'])->name('billing.subscription.document');
+        Route::post('/billing/subscription/checkout-pix', [SubscriptionController::class, 'checkoutPix'])->name('billing.subscription.checkout-pix');
+
         Route::prefix('support')
             ->name('support.')
             ->group(function () {
@@ -142,3 +151,5 @@ Route::middleware(['auth', config('jetstream.auth_session')])->group(function ()
 
 // Push Notifications
 Route::get('/vapid-public-key', fn() => response(trim(env('VAPID_PUBLIC_KEY')), 200, ['Content-Type' => 'text/plain']));
+
+Route::post('/webhooks/asaas', AsaasWebhookController::class)->name('webhooks.asaas');

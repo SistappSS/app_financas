@@ -28,6 +28,20 @@
 
 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
     <label class="block text-sm">
+        <span class="text-xs font-medium text-neutral-600 dark:text-neutral-300">CPF / CNPJ</span>
+        <input
+            type="text"
+            id="cpf_cnpj"
+            name="cpf_cnpj"
+            value="{{ old('cpf_cnpj', $user->cpf_cnpj ?? '') }}"
+            placeholder="000.000.000-00"
+            class="mt-1 w-full rounded-xl border border-neutral-200/70 dark:border-neutral-800/70 bg-white/90 dark:bg-neutral-900/70 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+        >
+    </label>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+    <label class="block text-sm">
         <span class="text-xs font-medium text-neutral-600 dark:text-neutral-300">Senha</span>
         <input
             type="password"
